@@ -1,0 +1,13 @@
+{
+  "name": "@it-sentinel/scripts",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "manifest": "tsx generate-manifests.ts"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.1",
+    "@types/node": "^22.7.5"
+  }
+}

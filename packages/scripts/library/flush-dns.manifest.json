@@ -1,0 +1,13 @@
+{
+  "scriptId": "flush-dns",
+  "name": "Flush DNS",
+  "category": "network",
+  "tier": "T3",
+  "version": "1.0.0",
+  "sha256": "e0b163b33920982c37a035f1ca66bbbcfb8e8c748ea2610606ecbf5b66a01814",
+  "scriptPath": "flush-dns.ps1",
+  "timeoutSeconds": 15,
+  "idempotent": true,
+  "rollbackDefined": false,
+  "requiredApprovals": 0
+}

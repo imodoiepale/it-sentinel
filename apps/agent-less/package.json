@@ -1,0 +1,21 @@
+{
+  "name": "@it-sentinel/agent-less",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": { "sentinel-agentless": "./src/main.ts" },
+  "scripts": {
+    "start": "tsx src/main.ts",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@it-sentinel/contracts": "workspace:*",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "tsx": "^4.19.1",
+    "vitest": "^2.1.4",
+    "@types/node": "^22.7.5"
+  }
+}

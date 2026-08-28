@@ -1,0 +1,13 @@
+{
+  "scriptId": "clear-print-queue",
+  "name": "Clear Print Queue",
+  "category": "printer",
+  "tier": "T3",
+  "version": "1.0.0",
+  "sha256": "952f219ff45f644087841c57ca9dca849ffcb9e6273ff0bbe297431a345cf63f",
+  "scriptPath": "clear-print-queue.ps1",
+  "timeoutSeconds": 30,
+  "idempotent": true,
+  "rollbackDefined": false,
+  "requiredApprovals": 0
+}

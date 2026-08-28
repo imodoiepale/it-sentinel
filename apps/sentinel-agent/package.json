@@ -1,0 +1,22 @@
+{
+  "name": "@it-sentinel/sentinel-agent",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/main.ts",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@it-sentinel/contracts": "workspace:*",
+    "@supabase/supabase-js": "^2.45.4",
+    "zod": "^3.23.8",
+    "zod-to-json-schema": "^3.23.5"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "tsx": "^4.19.1",
+    "vitest": "^2.1.4",
+    "@types/node": "^22.7.5"
+  }
+}

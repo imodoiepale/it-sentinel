@@ -1,0 +1,13 @@
+{
+  "scriptId": "windows-system-health",
+  "name": "System Health",
+  "category": "windows",
+  "tier": "T2",
+  "version": "1.0.0",
+  "sha256": "60917ab01a0820a84cd600382c9102df1e6609fa21ca2253be0cbdae0e8dc2ee",
+  "scriptPath": "windows-system-health.ps1",
+  "timeoutSeconds": 20,
+  "idempotent": true,
+  "rollbackDefined": false,
+  "requiredApprovals": 0
+}

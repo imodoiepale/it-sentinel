@@ -1,0 +1,13 @@
+{
+  "scriptId": "restart-spooler",
+  "name": "Restart Print Spooler",
+  "category": "printer",
+  "tier": "T3",
+  "version": "1.0.0",
+  "sha256": "22e49273ac4c67be4515fbb6b0e93c250822ddcc3f937533fc93a72a4c8bfac1",
+  "scriptPath": "restart-spooler.ps1",
+  "timeoutSeconds": 30,
+  "idempotent": true,
+  "rollbackDefined": false,
+  "requiredApprovals": 0
+}

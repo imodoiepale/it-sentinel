@@ -1,0 +1,13 @@
+{
+  "scriptId": "enquest-check-services",
+  "name": "Check Enquest Services",
+  "category": "enquest",
+  "tier": "T2",
+  "version": "1.0.0",
+  "sha256": "1ce8f29e2b4fa9dca41e22208f0f522456d487ee1757ba6859a193cf46cd89f6",
+  "scriptPath": "enquest-check-services.ps1",
+  "timeoutSeconds": 20,
+  "idempotent": true,
+  "rollbackDefined": false,
+  "requiredApprovals": 0
+}

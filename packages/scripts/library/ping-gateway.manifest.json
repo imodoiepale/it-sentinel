@@ -1,0 +1,13 @@
+{
+  "scriptId": "ping-gateway",
+  "name": "Ping Gateway",
+  "category": "network",
+  "tier": "T2",
+  "version": "1.0.0",
+  "sha256": "1693e18b041715fcb1f1893dfacc799ebed6da0f47b13108080156bf017eaae3",
+  "scriptPath": "ping-gateway.ps1",
+  "timeoutSeconds": 20,
+  "idempotent": true,
+  "rollbackDefined": false,
+  "requiredApprovals": 0
+}

@@ -1,0 +1,13 @@
+{
+  "scriptId": "defender-status",
+  "name": "Defender Status",
+  "category": "security",
+  "tier": "T2",
+  "version": "1.0.0",
+  "sha256": "7b44e07107e351a4a7bbbfde7e03c6e39217f48896067c87f7410ecfcb302b15",
+  "scriptPath": "defender-status.ps1",
+  "timeoutSeconds": 20,
+  "idempotent": true,
+  "rollbackDefined": false,
+  "requiredApprovals": 0
+}

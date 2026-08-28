@@ -1,0 +1,13 @@
+{
+  "scriptId": "test-print",
+  "name": "Test Print",
+  "category": "printer",
+  "tier": "T2",
+  "version": "1.0.0",
+  "sha256": "8501e6a0c51dea794187cf7a4b8abfc34423768e074d609945f5ac3941268d53",
+  "scriptPath": "test-print.ps1",
+  "timeoutSeconds": 20,
+  "idempotent": true,
+  "rollbackDefined": false,
+  "requiredApprovals": 0
+}
