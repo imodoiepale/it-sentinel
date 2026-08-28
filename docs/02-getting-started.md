@@ -20,9 +20,9 @@ This installs all ten workspace packages in one pass (`pnpm-workspace.yaml` cove
 
 ## 2. Get access to the Supabase project
 
-The live project is **`IT COMMAND CENTER`** (`oohuqbxrwsjfgzigefam`, `eu-central-1`). You need:
+The live project is **`IT COMMAND CENTER`** (`ncyerayycwkqytznnkrs`, `eu-central-1`). You need:
 
-- The **project URL**: `https://oohuqbxrwsjfgzigefam.supabase.co`
+- The **project URL**: `https://ncyerayycwkqytznnkrs.supabase.co`
 - The **publishable/anon key** (safe to put in frontend `.env` files — it's RLS-constrained, not a secret)
 - The **service-role key** (a real secret — never commit it, never paste it into chat, never let it reach the browser). Get it from the Supabase dashboard: Project Settings → API → service_role secret key.
 

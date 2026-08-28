@@ -8,7 +8,7 @@ Every app that needs configuration ships a `.env.example` — the authoritative 
 
 ### `apps/control-plane`
 ```
-SUPABASE_URL=https://oohuqbxrwsjfgzigefam.supabase.co
+SUPABASE_URL=https://ncyerayycwkqytznnkrs.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=            # secret — never commit, never paste in chat
 PORT=8787
 WHATSAPP_ACCESS_TOKEN=                # optional — no-ops with a log line if unset
@@ -20,7 +20,7 @@ DAILY_DIGEST_RECIPIENTS=              # comma-separated E.164 numbers; empty = s
 
 ### `apps/relay`
 ```
-SUPABASE_URL=https://oohuqbxrwsjfgzigefam.supabase.co
+SUPABASE_URL=https://ncyerayycwkqytznnkrs.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=            # secret — same key, same rules
 RELAY_PORT=8788
 RELAY_VNC_PORT=5900
@@ -28,7 +28,7 @@ RELAY_VNC_PORT=5900
 
 ### `apps/web`
 ```
-NEXT_PUBLIC_SUPABASE_URL=https://oohuqbxrwsjfgzigefam.supabase.co
+NEXT_PUBLIC_SUPABASE_URL=https://ncyerayycwkqytznnkrs.supabase.co
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...   # safe for the browser — this is its purpose
 NEXT_PUBLIC_CONTROL_PLANE_URL=http://localhost:8787
 ```
@@ -51,7 +51,7 @@ SENTINEL_SCRIPTS_DIR=                 # defaults to packages/scripts/library rel
 
 ### `apps/sentinel-agent`
 ```
-SUPABASE_URL=https://oohuqbxrwsjfgzigefam.supabase.co
+SUPABASE_URL=https://ncyerayycwkqytznnkrs.supabase.co
 SUPABASE_PUBLISHABLE_KEY=sb_publishable_...   # NOT service-role — this process must only ever have operator-scoped access
 SENTINEL_AGENT_PORT=8789
 ```
@@ -70,7 +70,7 @@ The plan calls for:
 
 ## Database — already live, no deployment step needed there
 
-The Supabase project (`oohuqbxrwsjfgzigefam`) is already active with all 24+ migrations applied, RLS verified, and 44 branches seeded. Nothing further is required on the database side to start development against it — see [04-database.md](./04-database.md) and [02-getting-started.md](./02-getting-started.md) for access setup.
+The Supabase project (`ncyerayycwkqytznnkrs`) is already active with all 24+ migrations applied, RLS verified, and 44 branches seeded. Nothing further is required on the database side to start development against it — see [04-database.md](./04-database.md) and [02-getting-started.md](./02-getting-started.md) for access setup.
 
 ## Local development stack
 

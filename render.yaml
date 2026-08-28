@@ -52,9 +52,12 @@ services:
         value: "20"
       - key: NEXT_PUBLIC_SUPABASE_URL
         value: https://ncyerayycwkqytznnkrs.supabase.co
-      # Publishable key: browser-safe by design, so committing it is correct.
+      # Browser-safe by design, so committing it would be acceptable — but it
+      # is set in the dashboard instead, because a hardcoded key here is tied
+      # to one project and this repo has already been repointed once. A stale
+      # value would build cleanly and fail only at runtime, in the browser.
       - key: NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
-        value: sb_publishable_2-Oj-6K0LcV5xAHtqbO7Eg_7IDSN1ki
+        sync: false
       - key: NEXT_PUBLIC_CONTROL_PLANE_URL
         fromService:
           type: web

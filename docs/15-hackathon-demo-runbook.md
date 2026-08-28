@@ -15,7 +15,7 @@ one.
 
 | Secret | Where it goes | Blocks |
 |---|---|---|
-| `SUPABASE_SERVICE_ROLE_KEY` (`eyJ…` JWT) | `apps/control-plane/.env`, `apps/relay/.env`, Render dashboard | **Everything.** Dashboard → Project Settings → API Keys on project `oohuqbxrwsjfgzigefam`. This is *not* the `sbp_` personal access token. |
+| `SUPABASE_SERVICE_ROLE_KEY` (`eyJ…` JWT) | `apps/control-plane/.env`, `apps/relay/.env`, Render dashboard | **Everything.** Dashboard → Project Settings → API Keys on project `ncyerayycwkqytznnkrs`. This is *not* the `sbp_` personal access token. |
 | Operator account | Supabase Dashboard → Authentication → Users → Add user (tick *Auto Confirm*) | Login, and every command (see step 2) |
 | `ELEVENLABS_API_KEY` | `apps/control-plane/.env`, Render | Spoken alerts |
 | `OPENAI_API_KEY` | `apps/sentinel-agent/.env`, Render | Natural-language questions |
@@ -257,7 +257,7 @@ Wi-Fi. Call it `HUB_IP`.
 `apps/control-plane/.env`:
 
 ```
-SUPABASE_URL=https://oohuqbxrwsjfgzigefam.supabase.co
+SUPABASE_URL=https://ncyerayycwkqytznnkrs.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=eyJ...
 PORT=8787
 RELAY_PUBLIC_URL=ws://HUB_IP:8788
