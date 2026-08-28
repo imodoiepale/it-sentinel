@@ -4,27 +4,27 @@
   green before the judges arrive" button.
 
 .DESCRIPTION
-  Idempotent and safe on a machine that was never broken. It works from the
-  state file scripts/simulate-fault.ps1 writes BEFORE it acts, so a
-  simulation that died halfway still gets cleaned up. On top of that it
-  runs a conservative sweep that does not need the state file at all:
+  Idempotent, and safe on a machine that was never broken. It works from the
+  state file simulate-fault.ps1 writes BEFORE it acts, so a simulation that
+  died halfway still gets cleaned up. On top of that it runs a conservative
+  sweep that needs no state file at all:
 
     - Start the Spooler if it is stopped.
     - Start tvnserver if it is installed and stopped.
-    - Clear PRINTER_ATTRIBUTE_WORK_OFFLINE, resume, and drain the queue on
-      the simulation printer, then remove it.
+    - Clear PRINTER_ATTRIBUTE_WORK_OFFLINE on the simulation printer, drain
+      its queue, then remove it.
     - Report - but do NOT touch - any other printer that is currently
-      offline or paused, because that may be a genuine fault on a real
+      offline or holding jobs, because that may be a genuine fault on a real
       device and silently "fixing" it would hide it from the dashboard.
+    - Restart the Spooler so the cleared attributes are actually loaded.
 
-  Pass -AllPrinters to clear the offline flag and resume every local queue
-  on this machine. That is the panic button, and it will also clear a real
-  fault, so read what it prints.
+  Pass -AllPrinters to clear the offline flag and drain every local queue on
+  this machine. That is the panic button. It will also clear a real fault,
+  so read what it prints.
 
 .PARAMETER AllPrinters
-  Clear WORK_OFFLINE, resume and drain EVERY local queue, not just the ones
-  in the state file. Use when the state file is gone and something is still
-  red.
+  Clear WORK_OFFLINE and drain EVERY local queue, not just the ones this kit
+  touched. Use when the state file is gone and something is still red.
 
 .PARAMETER KeepSimPrinter
   Leave the IT-Sentinel-Sim printer installed. Saves a few seconds between
@@ -108,6 +108,32 @@ function Get-StateFault {
   return $State.faults.$Name
 }
 
+function Test-StateProp {
+  param([psobject]$Obj, [string]$Name)
+  if (-not $Obj) { return $false }
+  return ($Obj.PSObject.Properties.Name -contains $Name)
+}
+
+<#
+  Every CIM read goes through here so -WhatIf never leaks into the
+  CimCmdlets module auto-load, which otherwise floods the output with a
+  dozen "What if: Set Alias" lines before anything useful is printed.
+#>
+function Get-PrinterSnapshot {
+  $WhatIfPreference = $false
+  try {
+    return @(Get-CimInstance Win32_Printer -ErrorAction Stop | ForEach-Object {
+      [pscustomobject]@{
+        Name    = $_.Name
+        Online  = ((-not $_.WorkOffline) -and ($_.PrinterStatus -ne 7))
+        Offline = ([bool]$_.WorkOffline -or ($_.PrinterStatus -eq 7))
+      }
+    })
+  } catch {
+    return @()
+  }
+}
+
 function Get-PrinterKeyPath {
   param([string]$Name)
   return (Join-Path $script:PrinterKeyRoot $Name)
@@ -119,12 +145,12 @@ function Clear-PrinterOffline {
   $key = Get-PrinterKeyPath -Name $Name
   if (-not (Test-Path -LiteralPath $key)) {
     Add-Skip ('No registry key for printer "' + $Name + '" - nothing to clear.')
-    return $false
+    return
   }
   $prop = Get-ItemProperty -LiteralPath $key -Name 'Attributes' -ErrorAction SilentlyContinue
   if (-not $prop) {
     Add-Skip ('Printer "' + $Name + '" has no Attributes value - nothing to clear.')
-    return $false
+    return
   }
 
   $current = [int]$prop.Attributes
@@ -136,42 +162,30 @@ function Clear-PrinterOffline {
 
   if ($current -eq $wanted) {
     Add-Skip ('Printer "' + $Name + '" attributes already ' + $current + ' - not touched.')
-    return $false
+    return
   }
 
   if ($PSCmdlet.ShouldProcess($Name, ('Set printer Attributes ' + $current + ' -> ' + $wanted))) {
     Set-ItemProperty -LiteralPath $key -Name 'Attributes' -Value $wanted -Type DWord
     Add-Action ('Cleared the offline flag on "' + $Name + '" (attributes ' + $current + ' -> ' + $wanted + ').')
-    return $true
   }
-  return $false
 }
 
-function Clear-PrinterQueueState {
-  param([string]$Name, [bool]$Resume = $true)
+function Clear-PrinterJobs {
+  param([string]$Name)
 
   $jobs = @(Get-PrintJob -PrinterName $Name -ErrorAction SilentlyContinue)
-  if ($jobs.Count -gt 0) {
-    if ($PSCmdlet.ShouldProcess($Name, ('Remove ' + $jobs.Count + ' queued print jobs'))) {
-      foreach ($j in $jobs) {
-        Remove-PrintJob -InputObject $j -ErrorAction SilentlyContinue
-      }
-      Add-Action ('Removed ' + $jobs.Count + ' queued ' + $(if ($jobs.Count -eq 1) { 'job' } else { 'jobs' }) + ' from "' + $Name + '".')
-    }
-  } else {
+  if ($jobs.Count -eq 0) {
     Add-Skip ('Queue "' + $Name + '" is already empty.')
+    return
   }
-
-  if (-not $Resume) { return }
-
-  $q = Get-PrintQueue -Name $Name -ErrorAction SilentlyContinue
-  if ($q -and $q.IsPaused) {
-    if ($PSCmdlet.ShouldProcess($Name, 'Resume print queue')) {
-      Resume-PrintQueue -Name $Name -ErrorAction SilentlyContinue
-      Add-Action ('Resumed the print queue "' + $Name + '".')
+  if ($PSCmdlet.ShouldProcess($Name, ('Remove ' + $jobs.Count + ' queued print jobs'))) {
+    foreach ($j in $jobs) {
+      Remove-PrintJob -InputObject $j -ErrorAction SilentlyContinue
     }
-  } else {
-    Add-Skip ('Queue "' + $Name + '" is not paused.')
+    $noun = 'jobs'
+    if ($jobs.Count -eq 1) { $noun = 'job' }
+    Add-Action ('Removed ' + $jobs.Count + ' queued ' + $noun + ' from "' + $Name + '".')
   }
 }
 
@@ -206,7 +220,6 @@ Write-Host 'IT Sentinel fault reset' -ForegroundColor Cyan
 Write-Host ('Machine: ' + $env:COMPUTERNAME)
 
 $whatIf = $false
-if ($PSBoundParameters.ContainsKey('WhatIf')) { $whatIf = [bool]$PSBoundParameters['WhatIf'] }
 if ($WhatIfPreference) { $whatIf = $true }
 
 if (-not $whatIf -and -not (Test-Elevated)) {
@@ -225,70 +238,59 @@ if (-not $whatIf -and -not (Test-Elevated)) {
 }
 
 $state = Read-State
-$simPort = $false
+$simPortWasCreated = $false
 
 try {
   # -- 1. Services ----------------------------------------------------------
-  # Unconditional: the Spooler must be running before any printer work, and
-  # a stopped Spooler is a fault whether or not this kit caused it.
+  # Unconditional. The Spooler must be up before any printer work, and a
+  # stopped Spooler is a fault whether or not this kit caused it.
   Write-Head 'Services'
   Restore-ServiceRunning -Name 'Spooler'   -Label 'Print Spooler'
   Restore-ServiceRunning -Name 'tvnserver' -Label 'TightVNC Server'
 
-  # -- 2. Printers named in the state file ----------------------------------
-  Write-Head 'Printers'
+  # -- 2. Whatever the state file recorded ----------------------------------
+  Write-Head 'Printers named in the state file'
 
   $offlineState = Get-StateFault -State $state -Name 'printer-offline'
   if ($offlineState) {
     $restoreTo = -1
-    if ($offlineState.PSObject.Properties.Name -contains 'originalAttributes') {
+    if (Test-StateProp -Obj $offlineState -Name 'originalAttributes') {
       $restoreTo = [int]$offlineState.originalAttributes
     }
-    Clear-PrinterOffline -Name $offlineState.printer -RestoreTo $restoreTo | Out-Null
-
-    $resume = $true
-    if ($offlineState.PSObject.Properties.Name -contains 'wasPaused') {
-      $resume = -not [bool]$offlineState.wasPaused
+    Clear-PrinterOffline -Name $offlineState.printer -RestoreTo $restoreTo
+    Clear-PrinterJobs -Name $offlineState.printer
+    if ((Test-StateProp -Obj $offlineState -Name 'createdPort') -and $offlineState.createdPort) {
+      $simPortWasCreated = $true
     }
-    Clear-PrinterQueueState -Name $offlineState.printer -Resume $resume
-
-    if ($offlineState.PSObject.Properties.Name -contains 'createdPort' -and $offlineState.createdPort) { $simPort = $true }
+  } else {
+    Add-Skip 'No printer-offline entry recorded.'
   }
 
-  $jamState = Get-StateFault -State $state -Name 'print-queue-jam'
-  if ($jamState -and (-not $offlineState -or $jamState.printer -ne $offlineState.printer)) {
-    Clear-PrinterQueueState -Name $jamState.printer -Resume $true
-  }
-
-  $jamPrinterState = Get-StateFault -State $state -Name 'print-queue-jam-printer'
-  if ($jamPrinterState) {
-    if ($jamPrinterState.PSObject.Properties.Name -contains 'createdPort' -and $jamPrinterState.createdPort) { $simPort = $true }
+  $jobState = Get-StateFault -State $state -Name 'queued-jobs'
+  if ($jobState -and (-not $offlineState -or $jobState.printer -ne $offlineState.printer)) {
+    Clear-PrinterJobs -Name $jobState.printer
   }
 
   # -- 3. The simulation printer, state file or not -------------------------
-  $sim = Get-Printer -Name $script:SimPrinterName -ErrorAction SilentlyContinue
-  if ($sim) {
-    Clear-PrinterOffline -Name $script:SimPrinterName | Out-Null
-    Clear-PrinterQueueState -Name $script:SimPrinterName -Resume $true
+  Write-Head 'Simulation printer'
+  if (Get-Printer -Name $script:SimPrinterName -ErrorAction SilentlyContinue) {
+    Clear-PrinterOffline -Name $script:SimPrinterName
+    Clear-PrinterJobs -Name $script:SimPrinterName
     if ($KeepSimPrinter) {
-      Add-Skip ('Left the simulation printer "' + $script:SimPrinterName + '" installed (-KeepSimPrinter).')
-    } else {
-      if ($PSCmdlet.ShouldProcess($script:SimPrinterName, 'Remove simulation printer')) {
-        try {
-          Remove-Printer -Name $script:SimPrinterName -ErrorAction Stop
-          Add-Action ('Removed the simulation printer "' + $script:SimPrinterName + '".')
-        } catch {
-          Add-Problem ('Could not remove the simulation printer: ' + $_.Exception.Message)
-        }
+      Add-Skip ('Left "' + $script:SimPrinterName + '" installed (-KeepSimPrinter).')
+    } elseif ($PSCmdlet.ShouldProcess($script:SimPrinterName, 'Remove simulation printer')) {
+      try {
+        Remove-Printer -Name $script:SimPrinterName -ErrorAction Stop
+        Add-Action ('Removed the simulation printer "' + $script:SimPrinterName + '".')
+      } catch {
+        Add-Problem ('Could not remove the simulation printer: ' + $_.Exception.Message)
       }
-      if ($simPort) {
-        if ($PSCmdlet.ShouldProcess('nul:', 'Remove printer port created by the simulation')) {
-          try {
-            Remove-PrinterPort -Name 'nul:' -ErrorAction Stop
-            Add-Action 'Removed the nul: printer port the simulation created.'
-          } catch {
-            Add-Skip 'Left the nul: printer port in place - something else is using it.'
-          }
+      if ($simPortWasCreated -and $PSCmdlet.ShouldProcess('nul:', 'Remove the printer port the simulation created')) {
+        try {
+          Remove-PrinterPort -Name 'nul:' -ErrorAction Stop
+          Add-Action 'Removed the nul: printer port the simulation created.'
+        } catch {
+          Add-Skip 'Left the nul: printer port in place - something else is using it.'
         }
       }
     }
@@ -298,44 +300,38 @@ try {
 
   # -- 4. Sweep every other local queue -------------------------------------
   Write-Head 'Other local queues'
-  $others = @(Get-CimInstance Win32_Printer -ErrorAction SilentlyContinue |
-    Where-Object { $_.Name -ne $script:SimPrinterName })
+  $others = @(Get-PrinterSnapshot | Where-Object { $_.Name -ne $script:SimPrinterName })
 
   if ($others.Count -eq 0) {
     Add-Skip 'No other printers on this machine.'
   }
 
   foreach ($p in $others) {
-    $q = Get-PrintQueue -Name $p.Name -ErrorAction SilentlyContinue
-    $isPaused = $false
-    if ($q) { $isPaused = [bool]$q.IsPaused }
     $jobCount = @(Get-PrintJob -PrinterName $p.Name -ErrorAction SilentlyContinue).Count
-    $isOffline = ([bool]$p.WorkOffline) -or ($p.PrinterStatus -eq 7)
 
-    if (-not $isOffline -and -not $isPaused -and $jobCount -eq 0) {
-      Add-Skip ('"' + $p.Name + '" is healthy - not touched.')
+    if (-not $p.Offline -and $jobCount -eq 0) {
+      Add-Skip ('"' + $p.Name + '" is online with an empty queue - not touched.')
       continue
     }
 
     $desc = @()
-    if ($isOffline) { $desc += 'offline' }
-    if ($isPaused)  { $desc += 'paused' }
+    if ($p.Offline) { $desc += 'offline' }
     if ($jobCount -gt 0) { $desc += ([string]$jobCount + ' queued') }
 
     if ($AllPrinters) {
-      Clear-PrinterOffline -Name $p.Name | Out-Null
-      Clear-PrinterQueueState -Name $p.Name -Resume $true
+      Clear-PrinterOffline -Name $p.Name
+      Clear-PrinterJobs -Name $p.Name
     } else {
       Add-Problem ('"' + $p.Name + '" is ' + ($desc -join ', ') + '. NOT touched - this may be a real fault. Use -AllPrinters to clear it anyway.')
     }
   }
 
-  # -- 5. Restart the Spooler so attribute changes take effect --------------
+  # -- 5. Reload the Spooler ------------------------------------------------
   # The Spooler caches printers in memory; clearing the registry flag without
   # this leaves the queue reporting offline until the next reboot.
   if ($script:Actions.Count -gt 0) {
     Write-Head 'Reloading the Spooler'
-    if ($PSCmdlet.ShouldProcess('Spooler', 'Restart service so printer attribute changes load')) {
+    if ($PSCmdlet.ShouldProcess('Spooler', 'Restart so printer attribute changes load')) {
       try {
         Restart-Service -Name Spooler -Force -ErrorAction Stop
         Start-Sleep -Seconds 3
@@ -360,8 +356,8 @@ try {
   $script:Problems += ('Reset errored: ' + $_.Exception.Message)
 } finally {
   # Whatever happened above, never leave the Spooler down. A machine that
-  # cannot enumerate printers looks broken on the dashboard and cannot be
-  # repaired by any playbook in the library.
+  # cannot enumerate printers looks broken on the dashboard and no playbook
+  # in the library can repair it from there.
   $spooler = Get-Service -Name 'Spooler' -ErrorAction SilentlyContinue
   if ($spooler -and $spooler.Status -ne 'Running' -and -not $whatIf) {
     try {
@@ -379,18 +375,7 @@ try {
 # ---------------------------------------------------------------------------
 Write-Head 'Where this machine now stands'
 
-$printers = @()
-try {
-  $printers = @(Get-CimInstance Win32_Printer -ErrorAction Stop | ForEach-Object {
-    [pscustomobject]@{
-      Name   = $_.Name
-      Online = ((-not $_.WorkOffline) -and ($_.PrinterStatus -ne 7))
-    }
-  })
-} catch {
-  $printers = @()
-}
-
+$printers = Get-PrinterSnapshot
 if ($printers.Count -eq 0) {
   $printerWire = 'unknown'
 } elseif (@($printers | Where-Object { -not $_.Online }).Count -gt 0) {
@@ -438,24 +423,31 @@ if ($whatIf) {
   exit 0
 }
 
-if ($derived -eq 'healthy' -and $printerWire -ne 'unknown' -and $vncWire -ne 'STOPPED' -and $script:Problems.Count -eq 0) {
+$clean = ($derived -eq 'healthy' -and $printerWire -ne 'unknown' -and $vncWire -ne 'STOPPED' -and $script:Problems.Count -eq 0)
+if ($clean) {
   Write-Host '   This machine is GREEN. It will report healthy on the next heartbeat.' -ForegroundColor Green
   Write-Host ''
   exit 0
 }
 
-if ($script:Problems.Count -gt 0) {
-  Write-Host '   Read these before you present:' -ForegroundColor Yellow
-  foreach ($p in $script:Problems) { Write-Host ('     - ' + $p) -ForegroundColor Yellow }
+Write-Host '   Read this before you present:' -ForegroundColor Yellow
+foreach ($p in $script:Problems) {
+  Write-Host ('     - ' + $p) -ForegroundColor Yellow
 }
 if ($printerWire -eq 'unknown') {
-  Write-Host '   hb.printer is "unknown" - no printers enumerated. The Printer dot will be' -ForegroundColor Yellow
-  Write-Host '   grey, not green. Install a printer or run simulate-fault.ps1 -Fault' -ForegroundColor Yellow
-  Write-Host '   printer-offline then reset again to leave the simulation queue in place.' -ForegroundColor Yellow
+  Write-Host '     - hb.printer is "unknown": no printers enumerated. The Printer dot will be' -ForegroundColor Yellow
+  Write-Host '       grey, not green. Check the Spooler, or install a printer.' -ForegroundColor Yellow
+}
+if ($printerWire -eq 'critical') {
+  Write-Host '     - hb.printer is still "critical": a printer is offline. Re-run with' -ForegroundColor Yellow
+  Write-Host '       -AllPrinters if the offline queue is not a real fault.' -ForegroundColor Yellow
+}
+if ($vncWire -eq 'STOPPED') {
+  Write-Host '     - tvnserver is stopped, so remote desktop to this machine will fail.' -ForegroundColor Yellow
 }
 if ($securityWire -ne 'healthy') {
-  Write-Host '   Defender real-time protection is OFF. This kit never turns it off, so' -ForegroundColor Yellow
-  Write-Host '   something else did. It raises a p1 alert and the announcer WILL speak it.' -ForegroundColor Yellow
+  Write-Host '     - Defender real-time protection is OFF. This kit never turns it off, so' -ForegroundColor Yellow
+  Write-Host '       something else did. It raises a p1 alert and the announcer WILL speak it.' -ForegroundColor Yellow
 }
 Write-Host ''
 exit 0

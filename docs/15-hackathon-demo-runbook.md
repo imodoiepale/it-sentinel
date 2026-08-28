@@ -324,10 +324,18 @@ failed for a real reason during this build.
    ```
    Dispatch something to Lagos and confirm **only Lagos** ran it. Before
    migration 0025 any agent could pick up any command.
-4. **Break something**: `Stop-Service Spooler` on one laptop. Within ~15s the
-   row goes red and the announcer speaks. Click the page once first —
-   browsers block autoplay until you interact, and the first alert would
-   otherwise be silently swallowed.
+4. **Break something**: `.\scripts\simulate-fault.ps1 -Fault printer-down` on
+   one laptop. Within ~15s the row goes red and the announcer speaks. Click
+   the page once first — browsers block autoplay until you interact, and the
+   first alert would otherwise be silently swallowed.
+
+   > **Do not use `Stop-Service Spooler` for this.** An earlier version of
+   > this runbook told you to, and it does not work: with the spooler down
+   > `Win32_Printer` returns nothing, so `printers[]` is empty and the
+   > heartbeat reports `printer: "unknown"` — which is not a fault, so the row
+   > stays green and the dot goes grey. `simulate-fault.ps1` sets the printer's
+   > `WORK_OFFLINE` attribute instead, which is what `collect.ps1` actually
+   > reads. See [17-fault-simulation.md](17-fault-simulation.md).
 5. **Remote desktop**: open a machine, confirm the screen paints and you can
    type into it.
 
@@ -354,8 +362,10 @@ included). It must be green before you start the hub.
 | "How is the fleet?" | Counts read back from live data |
 | "What's wrong in Lagos?" | Per-machine fault detail |
 | "Why is the printer down there?" | The numbers behind it, from the raw heartbeat |
-| `Stop-Service Spooler` on Lagos | Row reddens, agent announces it unprompted |
-| "Restart the print spooler on Lagos" | Hash-pinned playbook dispatches; row returns green |
+| `simulate-fault.ps1 -Fault printer-down` on Lagos | Row reddens, a p2 alert is raised, the agent announces it unprompted |
+| "Clear the print queue on Lagos" | Hash-pinned playbook dispatches and genuinely drains the parked jobs |
+| "Did that work?" | `check_status` reads the real command transcript back |
+| `reset-faults.ps1` on Lagos | Back to green before the next run |
 | "Open Lagos" | That laptop's screen opens in the browser |
 | "Open Chrome on Lagos" | Chrome launches on the remote machine |
 | "Open all cameras" | Camera app opens on every machine, in batches of 5 |

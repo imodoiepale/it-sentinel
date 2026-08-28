@@ -151,7 +151,38 @@ async function evaluateChecks(assetId: string, siteId: string, hb: HeartbeatPayl
     if (error) throw error;
   }
 
-  if (hb.enquest !== "healthy") {
+  // A printer fault is the most common real-world incident at a branch and
+  // the one an operator most needs told about, but it used to write a
+  // `checks` row and nothing else — no alert, so nothing surfaced it and the
+  // console's announcer (which speaks p1/p2) stayed silent while the fleet
+  // table went red. A red row nobody is told about is a dashboard you have
+  // to be already staring at.
+  const faultedPrinters = hb.printers.filter((p) => !p.online && p.faultClass !== "none");
+  if (faultedPrinters.length > 0) {
+    // faultClass is part of the fingerprint so a driver fault and a network
+    // fault on the same machine are separate incidents — they have different
+    // fixes, and recurrence intelligence keys off this.
+    const worst = faultedPrinters[0]!;
+    await raiseAlert({
+      assetId,
+      siteId,
+      fingerprint: `printer_chain:${assetId}:${worst.faultClass}`,
+      severity: "p2",
+      title: `Printer ${worst.name} offline on ${hb.hostname}`,
+      detail: { name: worst.name, faultClass: worst.faultClass, queueDepth: worst.queueDepth, errorState: worst.errorState },
+    });
+  }
+
+  // "unknown" is deliberately NOT an alert, for either of the checks below.
+  //
+  // It means the collector could not determine the state — Enquest is not
+  // installed on this machine, the mail profile could not be read — which is
+  // a coverage gap, not a fault. Alerting on it meant every laptop raised a
+  // permanent p3 the moment it first reported (collect.ps1 hardcodes
+  // enquestDetail.status = 'unknown'), raiseAlert deduped it open forever,
+  // and the operator learned within a day that alerts mean nothing. An alert
+  // that is always firing is worse than no alert.
+  if (hb.enquest === "warning" || hb.enquest === "critical") {
     const fingerprint = `enquest_sync:${assetId}`;
     await raiseAlert({
       assetId,
@@ -163,7 +194,7 @@ async function evaluateChecks(assetId: string, siteId: string, hb: HeartbeatPayl
     });
   }
 
-  if (hb.endpointSecurity !== "healthy") {
+  if (hb.endpointSecurity === "warning" || hb.endpointSecurity === "critical") {
     const fingerprint = `endpoint_security:${assetId}`;
     await raiseAlert({
       assetId,
