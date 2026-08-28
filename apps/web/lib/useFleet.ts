@@ -33,7 +33,12 @@ export function useFleet() {
       .from("assets")
       .select(
         "id, hostname, site_id, asset_health(online, status, network_latency_ms, ram_usage, disk_free_percent, printer_status, email_status, endpoint_security_status, tightvnc_status, enquest_status, last_heartbeat_at)",
-      );
+      )
+      // Retired machines stay in the table so historical audit rows can still
+      // resolve a hostname (migration 0027 deliberately leaves RLS alone for
+      // that reason), so the roster has to exclude them here. Without this,
+      // "remove that PC" appears to do nothing at all on the board.
+      .is("decommissioned_at", null);
     if (assetsError) {
       setError(assetsError.message);
       setLoading(false);

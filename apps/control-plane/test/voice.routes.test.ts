@@ -24,6 +24,9 @@ const state = vi.hoisted(() => ({
   incidents: [] as any[],
   dispatched: [] as any[],
   dispatchThrows: null as Error | null,
+  retireCalls: [] as any[],
+  retireResult: { already_retired: false } as any,
+  retireError: null as any,
 }));
 
 vi.mock("../src/db.js", () => {
@@ -42,6 +45,7 @@ vi.mock("../src/db.js", () => {
       select: () => chain,
       eq: () => chain,
       in: () => chain,
+      is: () => chain,
       like: () => chain,
       gte: () => chain,
       order: () => chain,
@@ -55,8 +59,13 @@ vi.mock("../src/db.js", () => {
   return {
     db: {
       from: (name: string) => table(name),
-      rpc: async (fn: string) => {
+      rpc: async (fn: string, params?: any) => {
         if (fn === "resolve_branch_by_voice") return { data: state.branchMatches, error: null };
+        if (fn === "retire_asset") {
+          state.retireCalls.push(params);
+          if (state.retireError) return { data: null, error: state.retireError };
+          return { data: [state.retireResult], error: null };
+        }
         return { data: null, error: null };
       },
     },
@@ -165,6 +174,9 @@ beforeEach(() => {
   state.assetHealth = [];
   state.dispatched = [];
   state.dispatchThrows = null;
+  state.retireCalls = [];
+  state.retireResult = { already_retired: false };
+  state.retireError = null;
 });
 
 const ACTION_ROUTES = [
@@ -858,5 +870,74 @@ describe("get_branch_status surfaces recurrence at the moment the fault is repor
     const body = (await call("/v1/voice/branch", { branch: "Lagos" })).json();
     expect(body.speech).not.toMatch(/isn't new|last fix|nothing proven/i);
     expect(body.recurrence.timesSeen).toBe(0);
+  });
+});
+
+describe("retiring a machine is two-step, and never guesses which one", () => {
+  // The only destructive-ish route here, and speech recognition mishears
+  // hostnames constantly — so a single misheard turn must not take a machine
+  // off the board mid-demo.
+  it("asks for confirmation instead of retiring on the first turn", async () => {
+    const res = await call("/v1/voice/retire", { branch: "Lagos" });
+    expect(res.json().requiresConfirmation).toBe(true);
+    expect(res.json().speech.toLowerCase()).toContain("confirm");
+    expect(state.retireCalls).toHaveLength(0);
+  });
+
+  it("retires only once confirm is explicitly true", async () => {
+    const res = await call("/v1/voice/retire", { branch: "Lagos", confirm: true });
+    expect(state.retireCalls).toHaveLength(1);
+    expect(state.retireCalls[0]).toMatchObject({ p_asset_id: "asset-1", p_actor_id: "operator-1" });
+    expect(res.json().retired).toBe(true);
+  });
+
+  it("refuses to pick when the branch has several machines and none is named", async () => {
+    state.assets = [
+      { id: "a1", hostname: "LAGOS-POS-01", site_id: "site-1" },
+      { id: "a2", hostname: "LAGOS-POS-02", site_id: "site-1" },
+    ];
+    const res = await call("/v1/voice/retire", { branch: "Lagos", confirm: true });
+    expect(res.json().status).toBe(409);
+    expect(state.retireCalls).toHaveLength(0);
+  });
+
+  it("refuses when a hostname hint matches more than one machine", async () => {
+    state.assets = [
+      { id: "a1", hostname: "LAGOS-POS-01", site_id: "site-1" },
+      { id: "a2", hostname: "LAGOS-POS-02", site_id: "site-1" },
+    ];
+    const res = await call("/v1/voice/retire", { branch: "Lagos", hostname: "LAGOS-POS", confirm: true });
+    expect(res.json().status).toBe(409);
+    expect(state.retireCalls).toHaveLength(0);
+  });
+
+  it("targets the named machine when the hint is unambiguous", async () => {
+    state.assets = [
+      { id: "a1", hostname: "LAGOS-POS-01", site_id: "site-1" },
+      { id: "a2", hostname: "LAGOS-TILL-09", site_id: "site-1" },
+    ];
+    await call("/v1/voice/retire", { branch: "Lagos", hostname: "TILL", confirm: true });
+    expect(state.retireCalls[0]).toMatchObject({ p_asset_id: "a2" });
+  });
+
+  it("reports an already-retired machine plainly rather than as a fresh retirement", async () => {
+    state.retireResult = { already_retired: true };
+    const res = await call("/v1/voice/retire", { branch: "Lagos", confirm: true });
+    expect(res.json().alreadyRetired).toBe(true);
+    expect(res.json().retired).toBeUndefined();
+  });
+
+  it("surfaces the database's role check as a spoken refusal, not a crash", async () => {
+    // retire_asset raises 42501 when the operator's role is below l3.
+    state.retireError = { code: "42501", message: "operator may not retire assets" };
+    const res = await call("/v1/voice/retire", { branch: "Lagos", confirm: true });
+    expect(res.json().status).toBe(403);
+    expect(res.json().speech.toLowerCase()).toContain("authorised");
+  });
+
+  it("is gated by the shared secret like every other route", async () => {
+    const res = await call("/v1/voice/retire", { branch: "Lagos", confirm: true }, "wrong");
+    expect(res.statusCode).toBe(401);
+    expect(state.retireCalls).toHaveLength(0);
   });
 });

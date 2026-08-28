@@ -633,7 +633,7 @@ export function registerVoiceRoutes(app: FastifyInstance) {
         };
       }
 
-      const { data: assets, error } = await db.from("assets").select("id, hostname").eq("site_id", branch.id);
+      const { data: assets, error } = await db.from("assets").select("id, hostname").eq("site_id", branch.id).is("decommissioned_at", null);
       if (error) throw error;
       if (!assets?.length) throw new VoiceError(404, `${branch.name} has no machines registered.`);
 
@@ -807,7 +807,7 @@ export function registerVoiceRoutes(app: FastifyInstance) {
       }
       const playbook = VOICE_PLAYBOOKS[key]!;
 
-      const { data: assets, error } = await db.from("assets").select("id, hostname").eq("site_id", branch.id);
+      const { data: assets, error } = await db.from("assets").select("id, hostname").eq("site_id", branch.id).is("decommissioned_at", null);
       if (error) throw error;
       if (!assets?.length) throw new VoiceError(404, `${branch.name} has no machines registered.`);
 
@@ -931,7 +931,7 @@ export function registerVoiceRoutes(app: FastifyInstance) {
         return { speech: `I can start, stop or restart a service. I don't know how to "${action}" one.` };
       }
 
-      const { data: assets, error } = await db.from("assets").select("id, hostname").eq("site_id", branch.id);
+      const { data: assets, error } = await db.from("assets").select("id, hostname").eq("site_id", branch.id).is("decommissioned_at", null);
       if (error) throw error;
       if (!assets?.length) throw new VoiceError(404, `${branch.name} has no machines registered.`);
 
@@ -1112,7 +1112,7 @@ export function registerVoiceRoutes(app: FastifyInstance) {
       const appId = String(body.app ?? body.appId ?? "").trim();
       if (!appId) return { speech: "Which application should I open?" };
 
-      const { data: assets, error } = await db.from("assets").select("id, hostname").eq("site_id", branch.id);
+      const { data: assets, error } = await db.from("assets").select("id, hostname").eq("site_id", branch.id).is("decommissioned_at", null);
       if (error) throw error;
       if (!assets?.length) throw new VoiceError(404, `${branch.name} has no machines registered.`);
 
@@ -1157,7 +1157,7 @@ export function registerVoiceRoutes(app: FastifyInstance) {
         label = branch.name;
       }
 
-      let q = db.from("assets").select("id, hostname, site_id");
+      let q = db.from("assets").select("id, hostname, site_id").is("decommissioned_at", null);
       if (siteId) q = q.eq("site_id", siteId);
       const { data: assets, error } = await q;
       if (error) throw error;
@@ -1228,6 +1228,98 @@ export function registerVoiceRoutes(app: FastifyInstance) {
         assetCount: assets.length,
         opened,
         commandIds,
+      };
+    }),
+  );
+
+  /**
+   * "Take Lagos POS one off the roster."
+   *
+   * Two-step by design, and it is the only route here that is. Everything
+   * else the agent can do is either read-only or reversible by running the
+   * opposite command; retirement changes the registry, and speech recognition
+   * mishears hostnames constantly. Requiring an explicit second turn means a
+   * misheard "retire" cannot quietly remove a machine from the board
+   * mid-demo.
+   *
+   * The heavy lifting — the role check, idempotency, closing open sessions
+   * and unredeemed tokens, and the audit row — all lives in retire_asset()
+   * (migration 0027), deliberately, so the console button and this route
+   * cannot diverge on who is allowed to do it.
+   */
+  app.post(
+    "/v1/voice/retire",
+    handle(async (body) => {
+      const branch = await resolveBranch(String(body.branch ?? ""));
+      const hostnameHint = String(body.hostname ?? "").trim();
+
+      const { data: assets, error } = await db
+        .from("assets")
+        .select("id, hostname")
+        .eq("site_id", branch.id)
+        .is("decommissioned_at", null)
+        .order("hostname");
+      if (error) throw error;
+      if (!assets?.length) throw new VoiceError(404, `${branch.name} has no machines on the roster.`);
+
+      let target = assets[0]!;
+      if (hostnameHint) {
+        const matches = assets.filter((a) => a.hostname.toLowerCase().includes(hostnameHint.toLowerCase()));
+        if (matches.length === 0) {
+          throw new VoiceError(404, `I can't find a machine called ${hostnameHint} at ${branch.name}.`);
+        }
+        // Never guess which machine to remove.
+        if (matches.length > 1) {
+          throw new VoiceError(409, `${branch.name} has ${matches.length} machines matching ${hostnameHint}. Which one?`);
+        }
+        target = matches[0]!;
+      } else if (assets.length > 1) {
+        throw new VoiceError(
+          409,
+          `${branch.name} has ${assets.length} machines on the roster. Which one should I retire?`,
+        );
+      }
+
+      if (body.confirm !== true) {
+        return {
+          speech: `Retiring ${target.hostname} takes it off the roster at ${branch.name} and ends any open session on it. Say "confirm retire" to go ahead.`,
+          requiresConfirmation: true,
+          branch: branch.name,
+          hostname: target.hostname,
+          assetId: target.id,
+        };
+      }
+
+      const operatorId = await resolveVoiceOperator();
+      const { data, error: rpcError } = await db.rpc("retire_asset", {
+        p_asset_id: target.id,
+        p_reason: String(body.reason ?? "retired by voice"),
+        p_actor_id: operatorId,
+      });
+      if (rpcError) {
+        // 42501 is the role check inside retire_asset. Surfacing it as a
+        // spoken refusal keeps the "voice is not a bypass" property visible.
+        if ((rpcError as { code?: string }).code === "42501") {
+          throw new VoiceError(403, `You're not authorised to retire machines at ${branch.name}.`);
+        }
+        throw rpcError;
+      }
+
+      const result = (Array.isArray(data) ? data[0] : data) as { already_retired?: boolean } | null;
+      if (result?.already_retired) {
+        return {
+          speech: `${target.hostname} was already off the roster.`,
+          branch: branch.name,
+          hostname: target.hostname,
+          alreadyRetired: true,
+        };
+      }
+
+      return {
+        speech: `${target.hostname} is off the roster at ${branch.name}. It will stop reporting once its agent is uninstalled on the machine itself.`,
+        branch: branch.name,
+        hostname: target.hostname,
+        retired: true,
       };
     }),
   );
