@@ -16,7 +16,10 @@ interface Props {
  * problems first, not a wall of green.
  */
 export function FleetTable({ rows, onOpenMachine }: Props) {
-  const [onlyProblems, setOnlyProblems] = useState(true);
+  // Defaults to false: with a healthy fleet, filtering to problems renders
+  // an empty table, which reads as "the app is broken" rather than
+  // "everything is fine" — the wrong first impression for a wall display.
+  const [onlyProblems, setOnlyProblems] = useState(false);
 
   const visible = useMemo(() => {
     if (!onlyProblems) return rows;

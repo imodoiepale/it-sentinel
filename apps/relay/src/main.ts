@@ -19,6 +19,9 @@ const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const PORT = Number(process.env.RELAY_PORT ?? 8788);
 const VNC_PORT = Number(process.env.RELAY_VNC_PORT ?? 5900);
 
+/** How long to wait for a branch machine's VNC port before giving up. */
+const CONNECT_TIMEOUT_MS = Number(process.env.RELAY_CONNECT_TIMEOUT_MS ?? 5000);
+
 if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
   console.error("[relay] SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required");
   process.exit(1);
@@ -69,10 +72,32 @@ wss.on("connection", async (ws, req) => {
     }
     plaintextPassword = secret as string;
 
-    const tcpSocket = tcpConnect({ host: asset.ip, port: asset.vnc_port ?? VNC_PORT });
+    // Postgres renders `inet` without a prefix for host addresses, but a row
+    // written as 192.168.1.5/32 would come back with the suffix and make
+    // tcpConnect fail with an unhelpful DNS error. Cheap to be defensive.
+    const targetHost = String(asset.ip).split("/")[0]!;
+    const targetPort = asset.vnc_port ?? VNC_PORT;
+
+    const tcpSocket = tcpConnect({ host: targetHost, port: targetPort });
 
     await new Promise<void>((resolve, reject) => {
-      tcpSocket.once("connect", () => resolve());
+      // Without an explicit timeout an unreachable branch machine — the
+      // normal case when TightVNC's firewall rule is missing, which is the
+      // single most common misconfiguration — leaves the operator watching
+      // a blank canvas for the OS-level TCP timeout, around 21s on Windows.
+      // Failing fast with a specific message is the difference between
+      // "the demo is broken" and "open port 5900 on that laptop".
+      tcpSocket.setTimeout(CONNECT_TIMEOUT_MS);
+      tcpSocket.once("timeout", () => {
+        tcpSocket.destroy();
+        reject(new Error(`timed out connecting to ${targetHost}:${targetPort} — is TightVNC running and allowed through the firewall?`));
+      });
+      tcpSocket.once("connect", () => {
+        // Clear the connect deadline; an idle established VNC session is
+        // normal and must not be torn down.
+        tcpSocket.setTimeout(0);
+        resolve();
+      });
       tcpSocket.once("error", (err) => reject(err));
     });
 

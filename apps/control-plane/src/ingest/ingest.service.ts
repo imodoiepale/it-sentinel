@@ -34,11 +34,27 @@ export async function ingestHeartbeat(raw: unknown) {
   }
   const hb = parsed.data;
 
+  // Resolve the branch first, then look the asset up WITHIN it. The assets
+  // table declares `unique (site_id, hostname)` — hostnames are only unique
+  // per site — but this lookup used to match on hostname alone. Two machines
+  // sharing a hostname (routine with cloned Windows images) would then
+  // collapse onto a single asset row: the second machine's heartbeats would
+  // overwrite the first's health, and one branch would render empty with no
+  // error anywhere.
+  const { data: site, error: siteError } = await db
+    .from("sites")
+    .select("id")
+    .eq("slug", hb.machine.branchSlug)
+    .maybeSingle();
+  if (siteError) throw siteError;
+  if (!site) throw new UnknownAssetError(hb.hostname, hb.machine.branchSlug);
+
   let asset: { id: string; site_id: string } | null;
   const { data: existingAsset, error: assetLookupError } = await db
     .from("assets")
     .select("id, site_id")
     .eq("hostname", hb.hostname)
+    .eq("site_id", site.id)
     .maybeSingle();
   if (assetLookupError) throw assetLookupError;
   asset = existingAsset;
@@ -47,16 +63,8 @@ export async function ingestHeartbeat(raw: unknown) {
     // First heartbeat from a machine we haven't seen — auto-provision it
     // under its branch rather than requiring hundreds of assets to be
     // hand-seeded before agent-less can give day-one coverage. The branch
-    // itself must already exist (seeded from the spreadsheet); an unknown
-    // *branch* still fails hard, since that indicates a real config error.
-    const { data: site, error: siteError } = await db
-      .from("sites")
-      .select("id")
-      .eq("slug", hb.machine.branchSlug)
-      .maybeSingle();
-    if (siteError) throw siteError;
-    if (!site) throw new UnknownAssetError(hb.hostname, hb.machine.branchSlug);
-
+    // was already resolved above; an unknown *branch* fails hard there,
+    // since that indicates a real config error rather than a new machine.
     const { data: created, error: createError } = await db
       .from("assets")
       .insert({

@@ -13,3 +13,11 @@ export const supabase = createClient(
 );
 
 export const CONTROL_PLANE_URL = process.env.NEXT_PUBLIC_CONTROL_PLANE_URL ?? "http://localhost:8787";
+
+/**
+ * The Sentinel Agent's /v1/ask endpoint. Separate origin from the control
+ * plane on purpose — the agent holds no service-role credential and reads
+ * only through the operator's own JWT, so it is deployed and scaled apart
+ * from anything that can act on the fleet.
+ */
+export const SENTINEL_AGENT_URL = process.env.NEXT_PUBLIC_SENTINEL_AGENT_URL ?? "http://localhost:8789";

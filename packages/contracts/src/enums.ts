@@ -29,7 +29,14 @@ export const PrinterFaultClass = z.enum([
 ]);
 export type PrinterFaultClass = z.infer<typeof PrinterFaultClass>;
 
-/** Action tiers T0-T6, enforced in the executor — never inferred from a prompt. */
+/**
+ * Action tiers T0-T6, enforced in the executor — never inferred from a prompt.
+ *
+ * T4 is the Operator Console tier: the only one that runs arbitrary
+ * PowerShell rather than an allowlisted cmdlet or a hash-pinned script. It
+ * buys that reach by requiring the operator to re-enter their password
+ * (POST /v1/auth/reauth), not by relaxing anything — T6 still denies at T4.
+ */
 export const ActionTier = z.enum(["T0", "T1", "T2", "T3", "T4", "T5", "T6"]);
 export type ActionTier = z.infer<typeof ActionTier>;
 

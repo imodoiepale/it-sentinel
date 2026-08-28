@@ -9,6 +9,8 @@ import { FleetTable } from "../components/FleetTable";
 import { StatusDot } from "../components/StatusDot";
 import { VoiceBar } from "../components/VoiceBar";
 import { MachineWorkspace } from "../components/MachineWorkspace";
+import { AlertAnnouncer } from "../components/AlertAnnouncer";
+import { useVoiceDirectives } from "../lib/useVoiceDirectives";
 
 /**
  * The Command Center screen: branch sidebar, fleet table for the selected
@@ -36,6 +38,23 @@ export default function CommandCenter() {
     () => branches.flatMap((b) => b.assets).find((a) => a.assetId === openAssetId) ?? null,
     [branches, openAssetId],
   );
+
+  /**
+   * Spoken commands land here. "Open Lagos" writes a console_directive from
+   * the voice webhook; this opens the same MachineWorkspace a click would,
+   * so voice and mouse converge on one code path rather than two.
+   */
+  useVoiceDirectives({
+    onOpenMachine: (assetId) => setOpenAssetId(assetId),
+    onFocusBranch: (siteId) => {
+      const branch = branches.find((b) => b.siteId === siteId);
+      if (branch) setSelectedSlug(branch.slug);
+    },
+    onOpenCameras: (siteId) => {
+      const branch = siteId ? branches.find((b) => b.siteId === siteId) : null;
+      setSelectedSlug(branch?.slug ?? null);
+    },
+  });
 
   if (authLoading || !session) {
     return <div className="min-h-screen flex items-center justify-center bg-[#0b0f14] text-gray-500 text-sm">Loading…</div>;
@@ -69,6 +88,7 @@ export default function CommandCenter() {
             {selectedBranch && (
               <StatusDot status={selectedBranch.overallStatus} label={`${selectedBranch.name}: ${selectedBranch.overallStatus}`} />
             )}
+            <AlertAnnouncer />
             <VoiceBar
               onOpenBranch={(slug) => {
                 setSelectedSlug(slug);

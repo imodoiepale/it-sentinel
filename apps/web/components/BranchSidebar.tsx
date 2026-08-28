@@ -24,7 +24,7 @@ export function BranchSidebar({ branches, selectedSlug, onSelect }: Props) {
   return (
     <nav className="w-72 shrink-0 border-r border-white/10 bg-black/20 overflow-y-auto">
       <div className="p-4 border-b border-white/10">
-        <div className="text-xs uppercase tracking-wide text-gray-400">Citywalk</div>
+        <div className="text-xs uppercase tracking-wide text-gray-400">Sentinel Global</div>
         <div className="text-sm mt-1">
           {total} branches · {online} reporting
         </div>

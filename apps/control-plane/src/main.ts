@@ -1,4 +1,5 @@
 import Fastify from "fastify";
+import cors from "@fastify/cors";
 import { db } from "./db.js";
 import { env } from "./env.js";
 import { HeartbeatValidationError, UnknownAssetError, ingestHeartbeat } from "./ingest/ingest.service.js";
@@ -8,9 +9,41 @@ import { openIncidentFromAlert, getRecurrence, fingerprintFor } from "./tickets/
 import { generateDailyReport, formatDailyReportText } from "./notify/report.service.js";
 import { sendDailyDigest } from "./notify/whatsapp.service.js";
 import { startDailyDigestScheduler } from "./notify/scheduler.js";
+import { registerVoiceRoutes } from "./voice/voice.routes.js";
+import { registerAuthRoutes } from "./auth/reauth.routes.js";
+import { runWithElevationToken } from "./auth/elevation.context.js";
+import { elevationReference } from "./auth/elevation.store.js";
 import { CommandResult, SessionRequest } from "@it-sentinel/contracts";
 
 const app = Fastify({ logger: true });
+
+/**
+ * The console runs on a different origin to this API (localhost:3210 in dev,
+ * two separate Render services in production), and it calls /v1/sessions and
+ * /v1/commands directly from the browser — so without CORS every remote
+ * desktop request and every terminal command is blocked before it leaves the
+ * page.
+ *
+ * CORS_ORIGINS is a comma-separated allowlist. It falls back to reflecting
+ * the request origin ONLY when unset, which keeps local development working;
+ * set it in production. Note this is not an authentication boundary — the
+ * routes' own policy checks are — but an open default in a deployed
+ * environment is still worth avoiding.
+ */
+await app.register(cors, {
+  origin: process.env.CORS_ORIGINS ? process.env.CORS_ORIGINS.split(",").map((o) => o.trim()) : true,
+  methods: ["GET", "POST", "OPTIONS"],
+  allowedHeaders: ["content-type", "authorization", "x-sentinel-voice-key"],
+  credentials: true,
+});
+
+// Webhook tools for the ElevenLabs conversational agent. Registered here so
+// they share this instance's policy path and audit trail — see voice.routes.ts.
+registerVoiceRoutes(app);
+
+// Operator password re-authentication, the gate in front of T4 — see
+// auth/reauth.routes.ts. Nothing else in this process can mint an elevation.
+registerAuthRoutes(app);
 
 /**
  * Every collector posts here. 400 on a contract violation (never silently
@@ -56,10 +89,32 @@ app.post<{ Params: { sessionId: string }; Body: { bytesTransferred: number; reco
   },
 );
 
-/** Voice/console/playbook dispatch — the one path into pgmq, per orchestrator.service.ts. */
+/**
+ * Voice/console/playbook dispatch — the one path into pgmq, per
+ * orchestrator.service.ts.
+ *
+ * `elevationToken` is optional and only meaningful at T4. Existing T1-T3
+ * callers, including every voice route, send a body without it and are
+ * unaffected; a T4 body without one is denied by evaluateCommandPolicy.
+ *
+ * Two things happen to the token here and nowhere else:
+ *  - it is put into request-scoped context for the policy check, and
+ *  - it is REPLACED by a one-way reference before dispatch, so what travels
+ *    to the queue, command_runs and the agent is a handle to the elevation
+ *    rather than the secret that unlocked it. The agent refuses ad-hoc T4
+ *    without that reference, which makes a hand-built T4 envelope that never
+ *    passed through here refusable at the machine as well as at the API.
+ */
 app.post("/v1/commands", async (request, reply) => {
   try {
-    const result = await dispatchCommand(request.body as Parameters<typeof dispatchCommand>[0]);
+    const { elevationToken, ...body } = (request.body ?? {}) as Parameters<typeof dispatchCommand>[0] & {
+      elevationToken?: string;
+    };
+    const args: Parameters<typeof dispatchCommand>[0] = elevationToken
+      ? { ...body, cmdArgs: { ...(body.cmdArgs ?? {}), elevationRef: elevationReference(elevationToken) } }
+      : body;
+
+    const result = await runWithElevationToken(elevationToken, () => dispatchCommand(args));
     return reply.code(202).send(result);
   } catch (err) {
     if (err instanceof CommandDeniedError) {
@@ -70,9 +125,18 @@ app.post("/v1/commands", async (request, reply) => {
   }
 });
 
-/** Long-poll endpoint the agent's exec loop calls to fetch queued work. */
-app.get("/v1/commands/poll", async (request, reply) => {
-  const messages = await pollCommands();
+/**
+ * Long-poll endpoint the agent's exec loop calls to fetch queued work.
+ * assetId is required — see pollCommands(). Refusing the unfiltered call
+ * with a 400 is deliberate: an agent that somehow omits it must fail loudly
+ * rather than quietly drain the whole fleet's queue.
+ */
+app.get<{ Querystring: { assetId?: string } }>("/v1/commands/poll", async (request, reply) => {
+  const assetId = request.query.assetId;
+  if (!assetId) {
+    return reply.code(400).send({ error: "missing_asset_id", message: "assetId query parameter is required" });
+  }
+  const messages = await pollCommands(assetId);
   return reply.code(200).send({ messages });
 });
 

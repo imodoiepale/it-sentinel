@@ -33,7 +33,20 @@ const DENY_RULES: DenyRule[] = [
   { pattern: "create_inbound_firewall_rule", test: /New-NetFirewallRule.*-Direction\s+Inbound/i },
   { pattern: "create_account", test: /New-LocalUser|net\s+user\s+\S+\s+\S+\s+\/add/i },
   { pattern: "grant_privilege", test: /Add-LocalGroupMember.*-Group\s+["']?Administrators/i },
-  { pattern: "modify_own_policy", test: /policy\/deny-list\.ts|tier-resolver\.ts/i },
+  /**
+   * Self-modification: the agent must not be able to edit the files that
+   * decide what it refuses.
+   *
+   * This rule used to read /policy\/deny-list\.ts|tier-resolver\.ts/i, which
+   * protected a path that does not exist — this file is src/exec/deny-list.ts,
+   * not src/policy/ — and even that only when spelled with a forward slash,
+   * so `Set-Content .\src\exec\deny-list.ts` matched nothing. Nothing
+   * exploited it because every ad-hoc tier also had a cmdlet allowlist and
+   * Set-Content is in none of them. T4 trades that allowlist away, so the
+   * gap became reachable and the rule now matches the guard files by name in
+   * any path form, forward or backslash, source or build output.
+   */
+  { pattern: "modify_own_policy", test: /\b(deny-list|tier-resolver|executor|app-launcher)\.(ts|js|mjs|cjs)\b/i },
   { pattern: "delete_user_data", test: /Remove-Item.*-Recurse.*-Force.*\\Users\\[^\\]+\\(Documents|Desktop|Pictures)/i },
   { pattern: "delete_mailbox", test: /Remove-Mailbox|Remove-MsolUser/i },
   { pattern: "delete_backup", test: /Remove-Item.*\.(bak|backup)\b/i },

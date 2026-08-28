@@ -6,6 +6,9 @@
   "scripts": {
     "build": "pnpm -r --filter=./packages/* build",
     "lint": "pnpm -r lint",
-    "test": "pnpm -r test"
+    "test": "pnpm -r --filter=!@it-sentinel/web test",
+    "typecheck": "pnpm --filter=./apps/* --filter=@it-sentinel/contracts --parallel exec tsc --noEmit",
+    "verify": "pnpm typecheck && pnpm test",
+    "manifest": "pnpm --filter @it-sentinel/scripts manifest"
   }
 }

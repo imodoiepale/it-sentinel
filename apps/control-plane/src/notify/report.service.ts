@@ -88,7 +88,7 @@ export async function generateDailyReport(): Promise<DailyReport> {
 /** Renders the report as the fixed-width text block from the plan's Reports section. */
 export function formatDailyReportText(report: DailyReport): string {
   const lines = [
-    "CITYWALK IT — DAILY HEALTH",
+    "SENTINEL GLOBAL — DAILY HEALTH",
     `Branches ${report.branchCount} · Devices ${report.deviceCount}`,
     `Healthy ${report.healthy} · Warning ${report.warning} · Critical ${report.critical} · Offline ${report.offlineOrStale}`,
     "─────────────────────────────────",

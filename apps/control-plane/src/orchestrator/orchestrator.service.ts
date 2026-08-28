@@ -32,6 +32,7 @@ export async function dispatchCommand(args: {
   adhocCommand?: string;
   serviceName?: string;
   serviceAction?: "start" | "stop" | "restart";
+  appId?: string;
   tier: CommandRequest["tier"];
 }): Promise<{ commandIds: string[] }> {
   // Blast-radius rule: anything touching more than N assets auto-promotes
@@ -71,6 +72,7 @@ export async function dispatchCommand(args: {
       adhocCommand: args.adhocCommand,
       serviceName: args.serviceName,
       serviceAction: args.serviceAction,
+      appId: args.appId,
     });
 
     const { error: enqueueError } = await db.rpc("enqueue_command", { p_message: request });
@@ -106,9 +108,17 @@ export async function dispatchCommand(args: {
   return { commandIds };
 }
 
-/** Called by the agent's poll loop to fetch its queued work. */
-export async function pollCommands(maxMessages = 5) {
+/**
+ * Called by the agent's poll loop to fetch ITS OWN queued work.
+ *
+ * assetId is mandatory, not optional-with-a-default: the queue is shared
+ * across the whole fleet and pgmq's `conditional` filter (migration 0025) is
+ * the only thing stopping one machine from dequeuing another's commands.
+ * An unfiltered read here would silently execute a Lagos command on Dubai.
+ */
+export async function pollCommands(assetId: string, maxMessages = 5) {
   const { data, error } = await db.rpc("dequeue_commands", {
+    p_asset_id: assetId,
     p_visibility_timeout_seconds: 60,
     p_max_messages: maxMessages,
   });

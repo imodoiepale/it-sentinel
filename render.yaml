@@ -1,0 +1,64 @@
+# Render blueprint for the public half of IT Sentinel.
+#
+# WHAT IS *NOT* HERE, AND WHY: apps/relay. The relay opens a TCP connection
+# to a branch machine's TightVNC port, and branch machines live on private
+# LAN addresses (192.168.x.x). Render has no route to those, so a relay
+# deployed here could never complete a single session. It runs on the
+# command laptop, on the same network as the fleet. This is a routing fact,
+# not a configuration choice — moving it here would silently break every
+# remote session.
+#
+# Set SUPABASE_SERVICE_ROLE_KEY in the Render dashboard, never in this file:
+# sync:false below means Render prompts for it and keeps it out of git.
+
+services:
+  - type: web
+    name: it-sentinel-control-plane
+    runtime: node
+    plan: starter # not `free`: cold starts run ~50s and will bite you on stage
+    region: frankfurt
+    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter @it-sentinel/control-plane build
+    startCommand: node apps/control-plane/dist/main.js
+    healthCheckPath: /healthz
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      - key: SUPABASE_URL
+        value: https://oohuqbxrwsjfgzigefam.supabase.co
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: PORT
+        value: "8787"
+      # The browser-reachable relay address on the venue LAN. Update this to
+      # the command laptop's actual IP once you are on the venue network —
+      # a stale value here is the most likely cause of "remote desktop just
+      # spins" during the demo.
+      - key: RELAY_PUBLIC_URL
+        sync: false
+      - key: VOICE_WEBHOOK_SECRET
+        sync: false
+      - key: VOICE_OPERATOR_ID
+        sync: false
+
+  - type: web
+    name: it-sentinel-web
+    runtime: node
+    plan: starter
+    region: frankfurt
+    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter @it-sentinel/web build
+    startCommand: pnpm --filter @it-sentinel/web start
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        value: https://oohuqbxrwsjfgzigefam.supabase.co
+      # Publishable key: browser-safe by design, so committing it is correct.
+      - key: NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+        value: sb_publishable_2-Oj-6K0LcV5xAHtqbO7Eg_7IDSN1ki
+      - key: NEXT_PUBLIC_CONTROL_PLANE_URL
+        fromService:
+          type: web
+          name: it-sentinel-control-plane
+          property: hostport
+      - key: NEXT_PUBLIC_ELEVENLABS_AGENT_ID
+        sync: false

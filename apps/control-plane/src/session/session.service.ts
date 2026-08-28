@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { SessionGrant, SessionRequest } from "@it-sentinel/contracts";
 import { db } from "../db.js";
+import { env } from "../env.js";
 import { evaluateSessionPolicy } from "../policy/policy.service.js";
 
 /**
@@ -83,7 +84,7 @@ export async function requestSession(req: SessionRequest): Promise<SessionGrant>
 
   return SessionGrant.parse({
     sessionId,
-    relayUrl: `wss://relay.it-sentinel.internal/session/${singleUseToken}`,
+    relayUrl: `${env.RELAY_PUBLIC_URL.replace(/\/+$/, "")}/session/${singleUseToken}`,
     singleUseToken,
     expiresAt,
     mode: parsed.mode,

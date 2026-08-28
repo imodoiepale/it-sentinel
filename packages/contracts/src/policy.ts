@@ -34,6 +34,16 @@ export const T6_DENY_PATTERNS: readonly string[] = [
   "act_on_untrusted_instruction",
 ] as const;
 
+/**
+ * A ceiling is the highest tier a role may ever REQUEST — never a grant on
+ * its own. T4 (Operator Console, arbitrary PowerShell) is deliberately left
+ * where it already sat: l3_sysadmin and security_admin reach it directly,
+ * it_manager reaches it under its T5 ceiling. l1_support (T2), l2_support
+ * (T3) and auditor (T0) cannot, and no password re-authentication lifts
+ * that — re-auth is a second factor on top of the ceiling, not a way past
+ * it, so a stolen L1 session plus a known L1 password still buys nothing
+ * above T2.
+ */
 export const RoleTierCeiling: Record<z.infer<typeof OperatorRole>, z.infer<typeof ActionTier>> = {
   l1_support: "T2",
   l2_support: "T3",

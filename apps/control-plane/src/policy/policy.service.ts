@@ -1,5 +1,7 @@
 import { ActionTier, OperatorRole, PolicyDecision, RoleTierCeiling, T6_DENY_PATTERNS } from "@it-sentinel/contracts";
 import { db } from "../db.js";
+import { currentElevationToken } from "../auth/elevation.context.js";
+import { consumeElevationToken } from "../auth/elevation.store.js";
 
 /**
  * The tier engine. This is advisory scaffolding for the control plane's own
@@ -72,16 +74,23 @@ export async function evaluateSessionPolicy(args: {
 }
 
 /**
- * Evaluate a command tier request against role ceiling and the T6 deny
- * list. Blast-radius and dual-approval enforcement for T5 lives in the
- * orchestrator, which has visibility into how many assets a dispatch
- * targets; this function only knows about one asset at a time.
+ * Evaluate a command tier request against role ceiling, the T6 deny list,
+ * and — at T4 only — a live password re-authentication. Blast-radius and
+ * dual-approval enforcement for T5 lives in the orchestrator, which has
+ * visibility into how many assets a dispatch targets; this function only
+ * knows about one asset at a time.
+ *
+ * elevationToken is optional and normally left unset: the dispatch path
+ * carries it in request-scoped context (see auth/elevation.context.ts) so
+ * that a caller which knows nothing about elevation cannot reach T4 by
+ * omission. The explicit parameter exists for direct callers and tests.
  */
 export async function evaluateCommandPolicy(args: {
   operatorId: string;
   siteId: string;
   tier: ActionTier;
   denyPatternHit?: string;
+  elevationToken?: string;
 }): Promise<PolicyDecision> {
   if (args.denyPatternHit && T6_DENY_PATTERNS.includes(args.denyPatternHit as (typeof T6_DENY_PATTERNS)[number])) {
     return PolicyDecision.parse({
@@ -118,10 +127,41 @@ export async function evaluateCommandPolicy(args: {
     });
   }
 
+  /**
+   * T4 is the Operator Console tier — arbitrary PowerShell, no cmdlet
+   * allowlist — so holding a role that reaches T4 is necessary and not
+   * sufficient. The operator must also have re-entered their password within
+   * the last five minutes and still hold the unspent single-use token that
+   * minted (see auth/reauth.routes.ts).
+   *
+   * Checked AFTER the ceiling check, for two reasons: an l1_support request
+   * should be refused for the honest reason (its ceiling) rather than for a
+   * missing token it could never use anyway, and a token must not be burned
+   * by a request that was going to be denied regardless — an operator who
+   * fat-fingers the wrong machine should not have to re-enter their password
+   * to try again.
+   */
+  if (args.tier === "T4") {
+    const check = consumeElevationToken(args.operatorId, args.elevationToken ?? currentElevationToken());
+    if (!check.ok) {
+      return PolicyDecision.parse({
+        allowed: false,
+        tier: args.tier,
+        requiresConfirmation: false,
+        requiresApprover: false,
+        requiresDualApproval: false,
+        deniedReason: `T4 requires password re-authentication: ${check.reason}`,
+      });
+    }
+  }
+
   return PolicyDecision.parse({
     allowed: true,
     tier: args.tier,
-    requiresConfirmation: args.tier === "T3",
+    // T4 is confirmed in the console the same way T3 is, on top of the
+    // password prompt — the read-back is what stops the wrong command going
+    // to a re-authenticated session, which re-auth itself says nothing about.
+    requiresConfirmation: args.tier === "T3" || args.tier === "T4",
     requiresApprover: args.tier === "T4",
     requiresDualApproval: args.tier === "T5",
   });

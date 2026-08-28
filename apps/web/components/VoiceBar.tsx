@@ -2,6 +2,7 @@
 
 import { useCallback, useRef, useState } from "react";
 import { supabase } from "../lib/supabase";
+import { AskSentinel } from "./AskSentinel";
 
 interface Props {
   onOpenBranch: (slug: string, name: string) => void;
@@ -23,6 +24,13 @@ interface ResolvedBranch {
  * everywhere) resolves through the same command dispatch path as the
  * console UI, and per the plan, any T3+ action is READ BACK AND CONFIRMED
  * before it runs — never fired directly off a voice transcript.
+ *
+ * Question-asking lives in the AskSentinel panel this bar toggles rather
+ * than in the push-to-talk grammar. Keeping the two apart means the
+ * branch-opening path stays the narrow, unambiguous thing it was built to
+ * be — every transcript here still resolves against the branch list only —
+ * while free-form questions get an input an operator can proofread before
+ * anything is sent.
  */
 export function VoiceBar({ onOpenBranch }: Props) {
   const [state, setState] = useState<VoiceState>("idle");
@@ -30,6 +38,7 @@ export function VoiceBar({ onOpenBranch }: Props) {
   const [candidates, setCandidates] = useState<ResolvedBranch[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const recognitionRef = useRef<any>(null);
+  const [askOpen, setAskOpen] = useState(false);
 
   const resolveBranch = useCallback(async (query: string) => {
     setState("resolving");
@@ -103,7 +112,7 @@ export function VoiceBar({ onOpenBranch }: Props) {
   }, []);
 
   return (
-    <div className="flex items-center gap-3">
+    <div className="relative flex items-center gap-3">
       {state === "confirming" && candidates.length > 0 && (
         <div className="text-xs bg-white/5 border border-white/10 rounded px-3 py-1.5 flex items-center gap-2">
           <span className="text-gray-400">Did you mean</span>
@@ -146,8 +155,25 @@ export function VoiceBar({ onOpenBranch }: Props) {
         }`}
         title="Hold to talk — try 'open Junction Mall'"
       >
-        🎙 {state === "listening" ? "Listening…" : "Ask Sentinel"}
+        🎙 {state === "listening" ? "Listening…" : "Open branch"}
       </button>
+
+      <button
+        onClick={() => setAskOpen((open) => !open)}
+        aria-expanded={askOpen}
+        className={`px-3 py-1.5 rounded-full text-sm border ${
+          askOpen ? "bg-white/20 border-white/30" : "bg-white/5 border-white/10 hover:bg-white/10"
+        }`}
+        title="Ask the Sentinel Agent a question about the fleet"
+      >
+        Ask Sentinel
+      </button>
+
+      {askOpen && (
+        <div className="absolute right-0 top-full z-30 mt-2">
+          <AskSentinel />
+        </div>
+      )}
     </div>
   );
 }

@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "IT Sentinel — Command Center",
-  description: "Citywalk IT operations command center",
+  description: "Global IT operations command center",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

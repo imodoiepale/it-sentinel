@@ -9,17 +9,18 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@fastify/cors": "^11.3.0",
+    "@fastify/websocket": "^11.0.1",
     "@it-sentinel/contracts": "workspace:*",
     "@supabase/supabase-js": "^2.45.4",
     "fastify": "^5.0.0",
-    "@fastify/websocket": "^11.0.1",
-    "zod": "^3.23.8",
-    "pino": "^9.4.0"
+    "pino": "^9.4.0",
+    "zod": "^3.23.8"
   },
   "devDependencies": {
-    "typescript": "^5.6.3",
+    "@types/node": "^22.7.5",
     "tsx": "^4.19.1",
-    "vitest": "^2.1.4",
-    "@types/node": "^22.7.5"
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.4"
   }
 }

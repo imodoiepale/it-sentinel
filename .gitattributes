@@ -1,2 +1,15 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# Hash-pinned PowerShell scripts MUST check out with LF on every platform.
+#
+# With `text=auto` alone these were stored LF and checked out CRLF on
+# Windows, so the SHA-256 on disk never matched the SHA-256 in the committed
+# manifest — and apps/agent-node/src/exec/executor.ts refuses any script
+# whose disk hash doesn't match. The effect was that every signed playbook
+# was rejected on every Windows agent, which is every agent.
+#
+# The executor and generate-manifests.ts also normalize line endings before
+# hashing, so a stray CRLF from an editor can't break execution either. This
+# line makes the checkout deterministic; that normalization makes it robust.
+*.ps1 text eol=lf

@@ -6,7 +6,8 @@
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./script-hash": "./src/script-hash.ts"
   },
   "scripts": {
     "test": "vitest run"
@@ -16,6 +17,7 @@
   },
   "devDependencies": {
     "typescript": "^5.6.3",
-    "vitest": "^2.1.4"
+    "vitest": "^2.1.4",
+    "@types/node": "^22.7.5"
   }
 }

@@ -33,7 +33,7 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#0b0f14]">
       <form onSubmit={handleSubmit} className="w-full max-w-sm p-6 border border-white/10 rounded-lg bg-black/20">
-        <div className="text-xs uppercase tracking-wide text-gray-400 mb-1">Citywalk</div>
+        <div className="text-xs uppercase tracking-wide text-gray-400 mb-1">Sentinel Global</div>
         <h1 className="text-lg font-semibold mb-6">IT Sentinel</h1>
 
         <label className="block text-xs text-gray-400 mb-1">Email</label>

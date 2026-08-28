@@ -3,3 +3,4 @@ export * from "./heartbeat.js";
 export * from "./command.js";
 export * from "./session.js";
 export * from "./policy.js";
+export * from "./vocabulary.js";

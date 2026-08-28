@@ -1,6 +1,6 @@
-import { createHash } from "node:crypto";
 import { readFileSync, writeFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
+import { hashScriptContent } from "@it-sentinel/contracts/script-hash";
 
 /**
  * Regenerates a .manifest.json next to every .ps1 in library/, with the
@@ -39,7 +39,9 @@ for (const meta of REGISTRY) {
   const scriptPath = `${meta.slug}.ps1`;
   const fullPath = join(LIB_DIR, scriptPath);
   const content = readFileSync(fullPath);
-  const sha256 = createHash("sha256").update(content).digest("hex");
+  // Line-ending-normalized: see script-hash.ts. Must stay identical to what
+  // the executor computes, or every signed script is refused.
+  const sha256 = hashScriptContent(content);
 
   const manifest = {
     scriptId: meta.slug,

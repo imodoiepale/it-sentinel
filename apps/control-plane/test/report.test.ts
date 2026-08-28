@@ -19,7 +19,7 @@ const sample: DailyReport = {
 describe("formatDailyReportText", () => {
   it("matches the plan's fixed-width report shape", () => {
     const text = formatDailyReportText(sample);
-    expect(text).toContain("CITYWALK IT — DAILY HEALTH");
+    expect(text).toContain("SENTINEL GLOBAL — DAILY HEALTH");
     expect(text).toContain("Branches 44 · Devices 1");
     expect(text).toContain("CRITICAL");
     expect(text).toContain("Junction Mall / CW-JCT-POS02      Printer offline");

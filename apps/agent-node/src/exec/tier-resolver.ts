@@ -38,6 +38,15 @@ const T3_REMEDIATE_CMDLETS = [
   "Restart-Spooler",
 ];
 
+/**
+ * T4 is absent by design, not by oversight. The Operator Console tier runs
+ * arbitrary PowerShell — an allowlist entry for it would either be a lie
+ * (a finite list that does not describe what T4 permits) or an every-cmdlet
+ * list that anyone reading this file would reasonably mistake for one. The
+ * executor branches around this table at T4 and gates on the operator's
+ * password re-authentication instead; the T6 deny-list, which is not an
+ * allowlist and lives in deny-list.ts, still applies there in full.
+ */
 const TIER_CMDLET_ALLOWLIST: Record<string, readonly string[]> = {
   T1: T1_INSPECT_CMDLETS,
   T2: T2_DIAGNOSE_CMDLETS,

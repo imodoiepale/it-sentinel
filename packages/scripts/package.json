@@ -9,5 +9,8 @@
   "devDependencies": {
     "tsx": "^4.19.1",
     "@types/node": "^22.7.5"
+  },
+  "dependencies": {
+    "@it-sentinel/contracts": "workspace:*"
   }
 }

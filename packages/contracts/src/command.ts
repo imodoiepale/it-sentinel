@@ -8,7 +8,7 @@ import { ActionTier } from "./enums.js";
  * travels in this envelope — the agent never receives a bare shell string.
  */
 
-export const CommandKind = z.enum(["signed_script", "adhoc_powershell", "service_action"]);
+export const CommandKind = z.enum(["signed_script", "adhoc_powershell", "service_action", "app_launch"]);
 export type CommandKind = z.infer<typeof CommandKind>;
 
 export const ServiceAction = z.enum(["start", "stop", "restart"]);
@@ -33,6 +33,11 @@ export const CommandRequest = z.object({
   // service_action
   serviceName: z.string().optional(),
   serviceAction: ServiceAction.optional(),
+
+  // app_launch — an identifier resolved against a fixed allowlist on the
+  // agent (see apps/agent-node/src/exec/app-launcher.ts), never a path or a
+  // command line. The wire format carries no executable text on purpose.
+  appId: z.string().max(64).optional(),
 
   timeoutSeconds: z.number().int().positive().max(600).default(60),
   approvals: z
