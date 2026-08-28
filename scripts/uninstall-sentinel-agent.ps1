@@ -482,13 +482,21 @@ try {
   # Other rules may still be opening 5900 - TightVNC's own installer adds one
   # if you let it - and this script has no business deleting a rule it did not
   # create. Say so rather than implying the port is now shut.
-  $otherOpen = @(Get-NetFirewallRule -Direction Inbound -Enabled True -Action Allow -ErrorAction SilentlyContinue |
-    Where-Object { $_.DisplayName -ne $VncRule } |
-    Where-Object {
-      $ports = $null
-      try { $ports = ($_ | Get-NetFirewallPortFilter -ErrorAction Stop) } catch { }
-      $ports -and ($ports.LocalPort -contains '5900')
-    })
+  # Two cmdlet calls, joined on InstanceID. Piping each rule into
+  # Get-NetFirewallPortFilter instead takes the better part of a minute on a
+  # machine with a few hundred rules, which is most of them.
+  $otherOpen = @()
+  try {
+    $openIds = @(Get-NetFirewallPortFilter -ErrorAction SilentlyContinue |
+      Where-Object { $_.LocalPort -contains '5900' } |
+      ForEach-Object { $_.InstanceID })
+    if ($openIds.Count -gt 0) {
+      $otherOpen = @(Get-NetFirewallRule -Direction Inbound -Enabled True -Action Allow -ErrorAction SilentlyContinue |
+        Where-Object { $_.DisplayName -ne $VncRule -and $openIds -contains $_.Name })
+    }
+  } catch {
+    Write-Warn ('Could not check for other rules allowing 5900: ' + $_.Exception.Message)
+  }
   if ($otherOpen.Count -gt 0) {
     Write-Warn ('Another ' + $otherOpen.Count + ' inbound rule(s) still allow TCP 5900:')
     foreach ($r in $otherOpen) { Write-Warn ('  - ' + $r.DisplayName) }

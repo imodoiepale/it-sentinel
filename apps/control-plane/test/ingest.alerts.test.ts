@@ -17,6 +17,7 @@ const state = vi.hoisted(() => ({
   alerts: [] as any[],
   checks: [] as any[],
   existingOpenFingerprints: [] as string[],
+  assetDecommissionedAt: null as string | null,
 }));
 
 vi.mock("../src/db.js", () => {
@@ -38,7 +39,7 @@ vi.mock("../src/db.js", () => {
       },
       maybeSingle: async () => {
         if (name === "sites") return { data: { id: "site-1" }, error: null };
-        if (name === "assets") return { data: { id: "asset-1", site_id: "site-1" }, error: null };
+        if (name === "assets") return { data: { id: "asset-1", site_id: "site-1", decommissioned_at: state.assetDecommissionedAt }, error: null };
         if (name === "alerts") {
           const open = state.existingOpenFingerprints.includes(chain._fp);
           return { data: open ? { id: "existing" } : null, error: null };
@@ -97,6 +98,7 @@ beforeEach(() => {
   state.alerts = [];
   state.checks = [];
   state.existingOpenFingerprints = [];
+  state.assetDecommissionedAt = null;
 });
 
 describe("'unknown' is a coverage gap, not a fault", () => {
@@ -160,5 +162,29 @@ describe("a printer fault is announced, not just coloured in", () => {
   it("still records a checks row for the fault chain", async () => {
     await ingestHeartbeat(heartbeat({ printer: "critical", printers: [offlinePrinter] }));
     expect(state.checks[0]).toMatchObject({ check_type: "printer_chain", status: "critical" });
+  });
+});
+
+describe("a retired machine's heartbeats are refused", () => {
+  it("rejects the heartbeat instead of quietly rewriting its health", async () => {
+    // The agent may still be running on a laptop that was taken off the
+    // roster. Accepting looks harmless — the row stays hidden — but it keeps
+    // asset_health and telemetry current, so a later restore_asset() brings
+    // the machine back reporting green as though it had never left.
+    state.assetDecommissionedAt = new Date().toISOString();
+    const { AssetRetiredError } = await import("../src/ingest/ingest.service.js");
+    await expect(ingestHeartbeat(heartbeat())).rejects.toBeInstanceOf(AssetRetiredError);
+    expect(state.alerts).toHaveLength(0);
+    expect(state.checks).toHaveLength(0);
+  });
+
+  it("tells the operator what to do about it", async () => {
+    state.assetDecommissionedAt = new Date().toISOString();
+    await expect(ingestHeartbeat(heartbeat())).rejects.toThrow(/uninstall-sentinel-agent/);
+  });
+
+  it("still accepts an active machine", async () => {
+    state.assetDecommissionedAt = null;
+    await expect(ingestHeartbeat(heartbeat())).resolves.toMatchObject({ assetId: "asset-1" });
   });
 });

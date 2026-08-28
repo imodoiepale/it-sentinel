@@ -20,6 +20,18 @@ export class UnknownAssetError extends Error {
   }
 }
 
+/** Raised when a still-running agent reports for a machine that was retired. */
+export class AssetRetiredError extends Error {
+  constructor(
+    public readonly hostname: string,
+    public readonly decommissionedAt: string,
+  ) {
+    super(
+      `${hostname} was retired from the roster at ${decommissionedAt}; uninstall the agent on that machine (scripts/uninstall-sentinel-agent.ps1)`,
+    );
+  }
+}
+
 function deriveHealthStatus(hb: HeartbeatPayload): "healthy" | "warning" | "critical" {
   const substatuses = [hb.printer, hb.email, hb.endpointSecurity, hb.enquest];
   if (substatuses.includes("critical") || !hb.online) return "critical";
@@ -49,15 +61,33 @@ export async function ingestHeartbeat(raw: unknown) {
   if (siteError) throw siteError;
   if (!site) throw new UnknownAssetError(hb.hostname, hb.machine.branchSlug);
 
-  let asset: { id: string; site_id: string } | null;
   const { data: existingAsset, error: assetLookupError } = await db
     .from("assets")
-    .select("id, site_id")
+    .select("id, site_id, decommissioned_at")
     .eq("hostname", hb.hostname)
     .eq("site_id", site.id)
     .maybeSingle();
   if (assetLookupError) throw assetLookupError;
-  asset = existingAsset;
+
+  let asset: { id: string; site_id: string } | null = existingAsset
+    ? { id: existingAsset.id, site_id: existingAsset.site_id }
+    : null;
+
+  // A retired machine is out of the fleet, and its heartbeats stop counting
+  // the moment it is. Accepting them looks harmless — the row stays retired
+  // and hidden — but it keeps rewriting asset_health and appending telemetry,
+  // so a later restore_asset() brings the machine back reporting green as
+  // though it had never left. That is a lie about a machine nobody has been
+  // watching.
+  //
+  // Refused with 410 Gone rather than 404: the asset genuinely exists and the
+  // agent is correctly configured, it has simply been taken off the roster.
+  // An agent that gets this should be uninstalled — see
+  // scripts/uninstall-sentinel-agent.ps1 — and saying so plainly beats a 404
+  // that reads as "your branch slug is wrong".
+  if (existingAsset?.decommissioned_at) {
+    throw new AssetRetiredError(hb.hostname, existingAsset.decommissioned_at);
+  }
 
   if (!asset) {
     // First heartbeat from a machine we haven't seen — auto-provision it

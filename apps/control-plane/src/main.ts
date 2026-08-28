@@ -2,7 +2,7 @@ import Fastify from "fastify";
 import cors from "@fastify/cors";
 import { db } from "./db.js";
 import { env } from "./env.js";
-import { HeartbeatValidationError, UnknownAssetError, ingestHeartbeat } from "./ingest/ingest.service.js";
+import { HeartbeatValidationError, UnknownAssetError, AssetRetiredError, ingestHeartbeat } from "./ingest/ingest.service.js";
 import { requestSession, SessionDeniedError, endSession } from "./session/session.service.js";
 import { dispatchCommand, pollCommands, reportCommandResult, CommandDeniedError } from "./orchestrator/orchestrator.service.js";
 import { openIncidentFromAlert, getRecurrence, fingerprintFor } from "./tickets/recurrence.service.js";
@@ -60,6 +60,9 @@ app.post("/v1/heartbeat", async (request, reply) => {
     }
     if (err instanceof UnknownAssetError) {
       return reply.code(404).send({ error: "unknown_asset", message: err.message });
+    }
+    if (err instanceof AssetRetiredError) {
+      return reply.code(410).send({ error: "asset_retired", message: err.message });
     }
     request.log.error(err);
     return reply.code(500).send({ error: "internal_error" });
