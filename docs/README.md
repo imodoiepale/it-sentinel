@@ -1,6 +1,6 @@
 # IT Sentinel — Documentation
 
-This is the documentation for **IT Sentinel**, the Citywalk IT Operations Command Center. Start here.
+This is the documentation for **IT Sentinel**, the Sentinel Global IT Operations Command Center. Start here.
 
 ## Read in this order if you're new
 
