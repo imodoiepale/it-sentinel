@@ -10,6 +10,7 @@ import { StatusDot } from "../components/StatusDot";
 import { VoiceBar } from "../components/VoiceBar";
 import { MachineWorkspace } from "../components/MachineWorkspace";
 import { AlertAnnouncer } from "../components/AlertAnnouncer";
+import { ActivityFeed } from "../components/ActivityFeed";
 import { useVoiceDirectives } from "../lib/useVoiceDirectives";
 
 /**
@@ -30,13 +31,14 @@ export default function CommandCenter() {
   }, [authLoading, session, router]);
 
   const selectedBranch = useMemo(() => branches.find((b) => b.slug === selectedSlug) ?? null, [branches, selectedSlug]);
+  const allRows = useMemo(() => branches.flatMap((b) => b.assets), [branches]);
   const visibleRows = useMemo(
-    () => (selectedBranch ? selectedBranch.assets : branches.flatMap((b) => b.assets)),
-    [selectedBranch, branches],
+    () => (selectedBranch ? selectedBranch.assets : allRows),
+    [selectedBranch, allRows],
   );
   const openAsset = useMemo(
-    () => branches.flatMap((b) => b.assets).find((a) => a.assetId === openAssetId) ?? null,
-    [branches, openAssetId],
+    () => allRows.find((a) => a.assetId === openAssetId) ?? null,
+    [allRows, openAssetId],
   );
 
   /**
@@ -99,7 +101,17 @@ export default function CommandCenter() {
             </button>
           </div>
         </header>
-        <FleetTable rows={visibleRows} onOpenMachine={setOpenAssetId} />
+        <div className="flex-1 flex min-h-0">
+          <FleetTable rows={visibleRows} onOpenMachine={setOpenAssetId} />
+          {/*
+            Always visible, and deliberately outside the branch filter: the
+            feed's job is to prove the whole fleet is being watched right
+            now, which a panel that empties when you click one branch does
+            not do. It is fed every asset for hostname lookup, not the
+            filtered set.
+          */}
+          <ActivityFeed assets={allRows} />
+        </div>
       </div>
 
       {openAsset && operatorId && (

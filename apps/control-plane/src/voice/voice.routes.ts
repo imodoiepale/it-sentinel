@@ -11,6 +11,7 @@ import { db } from "../db.js";
 import { env } from "../env.js";
 import { dispatchCommand, CommandDeniedError } from "../orchestrator/orchestrator.service.js";
 import { getScript, listScripts } from "../scripts/script-registry.js";
+import { getClassRecurrence, type ClassRecurrenceReport, type FixHistory } from "../tickets/recurrence.service.js";
 
 /**
  * Webhook tools for the ElevenLabs Conversational AI agent.
@@ -84,6 +85,104 @@ function playbookOffers(): { keyword: string; label: string }[] {
   return offers;
 }
 
+/**
+ * Spoken words to the check_type segment ingest.service.ts puts at the
+ * front of every fingerprint (`enquest_sync:<assetId>`).
+ *
+ * An allowlist for the same reason VOICE_PLAYBOOKS is one, with a second
+ * reason on top: getClassRecurrence turns this into a LIKE pattern, and a
+ * pattern assembled from a speech-to-text transcript is one stray percent
+ * sign away from matching every check in the fleet.
+ */
+const RECURRENCE_CHECKS: Record<string, { checkType: string; label: string }> = {
+  enquest: { checkType: "enquest_sync", label: "the Enquest sync check" },
+  sync: { checkType: "enquest_sync", label: "the Enquest sync check" },
+  security: { checkType: "endpoint_security", label: "the endpoint protection check" },
+  defender: { checkType: "endpoint_security", label: "the endpoint protection check" },
+  protection: { checkType: "endpoint_security", label: "the endpoint protection check" },
+  printer: { checkType: "printer_chain", label: "the printer fault chain" },
+  print: { checkType: "printer_chain", label: "the printer fault chain" },
+};
+
+/** RECURRENCE_CHECKS deduplicated by label, keeping the key that reaches it. */
+function recurrenceOffers(): { keyword: string; label: string }[] {
+  const offers: { keyword: string; label: string }[] = [];
+  for (const [keyword, check] of Object.entries(RECURRENCE_CHECKS)) {
+    if (!offers.some((o) => o.label === check.label)) offers.push({ keyword, label: check.label });
+  }
+  return offers;
+}
+
+/**
+ * A checkType read off a live alert will not always be one of the mapped
+ * ones, so this degrades to the raw segment rather than refusing to name
+ * it. Underscores are spelled out by some TTS voices.
+ */
+function checkLabel(checkType: string): string {
+  const known = Object.values(RECURRENCE_CHECKS).find((c) => c.checkType === checkType);
+  return known?.label ?? `the ${checkType.replace(/_/g, " ")} check`;
+}
+
+/**
+ * Below this many graded attempts, a success rate is not a measurement.
+ *
+ * "Ninety-two percent" off two data points is a number the listener will
+ * hear as evidence and act on, and one more failure would move it thirty
+ * points. Under the threshold the raw counts are spoken instead — "it has
+ * been tried twice and worked both times" says exactly as much as the data
+ * supports and no more.
+ */
+const MIN_ATTEMPTS_FOR_SUCCESS_RATE = 4;
+
+function spokenFixRecord(h: FixHistory): string {
+  if (h.attempts === 0) return "there is no record of whether it worked";
+  if (h.attempts < MIN_ATTEMPTS_FOR_SUCCESS_RATE) {
+    const outcome =
+      h.succeeded === h.attempts
+        ? `worked ${h.attempts === 1 ? "that one time" : "every time"}`
+        : h.succeeded === 0
+          ? "worked none of those times"
+          : `worked ${h.succeeded} of them`;
+    return `it has been tried ${h.attempts} ${plural(h.attempts, "time")} and ${outcome}`;
+  }
+  return `it has worked ${h.succeeded} of the ${h.attempts} times it has been tried, ${pct((h.succeeded / h.attempts) * 100)}`;
+}
+
+/** "3 at Lagos, 2 at Nairobi and 1 at Mombasa" — capped, because it is read aloud. */
+function spokenBranchSpread(branches: { branch: string; count: number }[]): string {
+  return spokenList(branches.slice(0, 3).map((b) => `${b.count} at ${b.branch}`));
+}
+
+/**
+ * The one sentence that answers "what fixed it last time", or an honest
+ * statement that nothing on record did. Never invents a fix name: an agent
+ * that guesses a remediation from a fault title is the failure this whole
+ * lookup exists to remove.
+ */
+function spokenPreviousFix(report: ClassRecurrenceReport): string {
+  if (!report.suggestedFix || !report.suggestedFixHistory) {
+    return "None of those resolutions record a fix that worked, so there is nothing proven to repeat.";
+  }
+  return `The last fix that worked was ${report.suggestedFix}; ${spokenFixRecord(report.suggestedFixHistory)}.`;
+}
+
+/**
+ * The newest open alert at a branch, used to answer "has THIS happened
+ * before" without the operator having to name the check. Its fingerprint's
+ * first segment is the check type — see fingerprintFor().
+ */
+async function newestOpenAlert(siteId: string): Promise<{ fingerprint: string; title: string } | null> {
+  const { data, error } = await db
+    .from("alerts")
+    .select("fingerprint, title")
+    .eq("site_id", siteId)
+    .eq("status", "open")
+    .order("created_at", { ascending: false })
+    .limit(1);
+  if (error) throw error;
+  return ((data ?? [])[0] as { fingerprint: string; title: string } | undefined) ?? null;
+}
+
 class VoiceError extends Error {
   constructor(
     public readonly status: number,
@@ -130,7 +229,14 @@ async function resolveVoiceOperator(): Promise<string> {
 async function resolveBranch(query: string): Promise<{ id: string; name: string; slug: string }> {
   const { data, error } = await db.rpc("resolve_branch_by_voice", { p_query: query, p_limit: 3 });
   if (error) throw error;
-  const matches = (data ?? []) as { id: string; name: string; slug: string; similarity: number }[];
+
+  // The RPC's first column is `site_id`, not `id` — see migration 0024,
+  // `returns table (site_id uuid, name text, slug text, similarity real)`.
+  // Reading `.id` here yielded undefined, which then travelled into
+  // `.eq("assets.site_id", undefined)` and made every branch-scoped route
+  // fail with an opaque 500. It passed 92 tests because the test mock
+  // encoded the same wrong shape; the mock now mirrors the real signature.
+  const matches = (data ?? []) as { site_id: string; name: string; slug: string; similarity: number }[];
 
   if (matches.length === 0) {
     throw new VoiceError(404, `I couldn't find a branch called ${query}.`);
@@ -139,7 +245,12 @@ async function resolveBranch(query: string): Promise<{ id: string; name: string;
   if (second && top!.similarity - second.similarity <= 0.25) {
     throw new VoiceError(409, `Did you mean ${top!.name} or ${second.name}?`);
   }
-  return { id: top!.id, name: top!.name, slug: top!.slug };
+  if (!top!.site_id) {
+    // Defensive: a null id would silently produce fleet-wide queries rather
+    // than branch-scoped ones, which is worse than refusing.
+    throw new VoiceError(500, `I resolved ${top!.name} but could not identify it. Check migration 0024 is applied.`);
+  }
+  return { id: top!.site_id, name: top!.name, slug: top!.slug };
 }
 
 function pct(n: number | null | undefined): string {
@@ -470,10 +581,30 @@ export function registerVoiceRoutes(app: FastifyInstance) {
         faults.push(`${r.assets.hostname}: ${issues.length ? issues.join(", ") : r.status}`);
       }
 
+      /**
+       * Recurrence is worth hearing at the moment the fault is REPORTED,
+       * not as an answer to a follow-up question the operator has to know
+       * to ask. "This is the fourth time this month, and Nairobi fixed it
+       * by restarting the sync service" changes what the technician does
+       * next; hearing the same thing two turns later usually does not.
+       *
+       * Only spoken when there is history — an extra sentence saying "and
+       * this has never happened before" on every single fault report is
+       * noise that trains the operator to stop listening to the tail of
+       * the answer.
+       */
+      const alert = await newestOpenAlert(branch.id);
+      const recurrence = alert ? await getClassRecurrence(String(alert.fingerprint).split(":")[0]!) : null;
+      const history =
+        recurrence && recurrence.timesSeen > 0
+          ? ` This isn't new: ${checkLabel(recurrence.checkType)} has been resolved ${recurrence.timesSeen} ${plural(recurrence.timesSeen, "time")} across ${recurrence.branches.length} ${plural(recurrence.branches.length, "branch", "branches")}. ${spokenPreviousFix(recurrence)} Ask me for the history if you want the detail.`
+          : "";
+
       return {
-        speech: `${branch.name} has ${bad.length} of ${rows.length} machines with problems. ${faults.slice(0, 3).join(". ")}.`,
+        speech: `${branch.name} has ${bad.length} of ${rows.length} machines with problems. ${faults.slice(0, 3).join(". ")}.${history}`,
         branch: branch.name,
         faults,
+        recurrence,
       };
     }),
   );
@@ -568,6 +699,95 @@ export function registerVoiceRoutes(app: FastifyInstance) {
         stale,
         ageSeconds: Number.isFinite(ageMs) ? Math.round(ageMs / 1000) : null,
         reports,
+      };
+    }),
+  );
+
+  /**
+   * "Has this happened before?" — the question the whole incident history
+   * exists to answer, and until this route nothing in the voice layer asked
+   * it.
+   *
+   * Deliberately CLASS-level, not per-machine. The operator asking it at
+   * Lagos wants to know whether Nairobi has already solved this, and a
+   * per-asset fingerprint can only ever answer "not on this machine" — see
+   * getClassRecurrence() for why the two lookups have to coexist rather
+   * than one replacing the other.
+   *
+   * When no check is named it is read off the branch's newest open alert,
+   * because the natural phrasing is "has this happened before", where
+   * "this" is whatever is currently red.
+   */
+  app.post(
+    "/v1/voice/recurrence",
+    handle(async (body) => {
+      const branch = await resolveBranch(String(body.branch ?? body.query ?? ""));
+      const requested = String(body.checkType ?? body.check ?? "").trim().toLowerCase();
+      const offers = recurrenceOffers();
+
+      let checkType: string;
+      let liveFault: string | null = null;
+      if (requested) {
+        const key = Object.keys(RECURRENCE_CHECKS).find((k) => requested.includes(k));
+        if (!key) {
+          return {
+            speech: `I can look up history for ${spokenList(offers.map((o) => o.label), "or")}. I don't track a "${requested}" check.`,
+            checks: offers,
+          };
+        }
+        checkType = RECURRENCE_CHECKS[key]!.checkType;
+      } else {
+        const alert = await newestOpenAlert(branch.id);
+        if (!alert) {
+          return {
+            speech: `Nothing is alerting at ${branch.name} right now, so there's no live fault to look up. Name the check — ${spokenList(offers.map((o) => o.label), "or")} — and I'll pull its history.`,
+            branch: branch.name,
+            checks: offers,
+          };
+        }
+        liveFault = alert.title;
+        checkType = String(alert.fingerprint).split(":")[0]!;
+      }
+
+      const report = await getClassRecurrence(checkType);
+      const label = checkLabel(checkType);
+      const here = report.branches.find((b) => b.branch === branch.name)?.count ?? 0;
+
+      if (report.timesSeen === 0) {
+        // "No history" and "no answer" are different things and must sound
+        // different. Padding this with a plausible-sounding fix is the one
+        // failure mode this route cannot have.
+        return {
+          speech: `No. There is no resolved history for ${label} anywhere in the fleet, so I have no previous fix to go on. On the record, this is the first time.`,
+          branch: branch.name,
+          liveFault,
+          label,
+          ...report,
+        };
+      }
+
+      const onlyBranch = report.branches[0]?.branch ?? "an unnamed branch";
+      const scope =
+        report.branches.length > 1
+          ? `across ${report.branches.length} branches: ${spokenBranchSpread(report.branches)}`
+          : report.timesSeen === 1
+            ? `at ${onlyBranch}`
+            : `, all of them at ${onlyBranch}`;
+      // The cross-branch case is the one worth calling out explicitly: a
+      // technician who has never seen this fault will not think to ask
+      // whether another branch has.
+      const local =
+        here === 0
+          ? ` This is the first time at ${branch.name}, so the history is all from elsewhere.`
+          : ` ${here} of ${plural(here, "those was", "those were")} here at ${branch.name}.`;
+
+      return {
+        speech: `Yes. ${label.charAt(0).toUpperCase()}${label.slice(1)} has been resolved ${report.timesSeen} ${plural(report.timesSeen, "time")}${scope.startsWith(",") ? "" : " "}${scope}.${local} ${spokenPreviousFix(report)}`,
+        branch: branch.name,
+        liveFault,
+        label,
+        timesSeenAtBranch: here,
+        ...report,
       };
     }),
   );
@@ -669,6 +889,7 @@ export function registerVoiceRoutes(app: FastifyInstance) {
       const sections = [
         "Here's what I can do.",
         "For monitoring, I can summarise the whole fleet, report faults for one branch, give you the detail behind them — printers, network, disk, services, endpoint security or Enquest — and tell you how recent commands turned out.",
+        `I can also tell you whether a fault has been seen before anywhere in the fleet, at which branches, and what fix worked last time — for ${spokenList(recurrenceOffers().map((o) => o.label), "or")}.`,
         scripts.length === 0
           ? "Remediation playbooks aren't loaded on the server at the moment, so I can't run one right now."
           : `For remediation, I can ${spokenList(playbookLabels, "or")}.`,
@@ -681,6 +902,7 @@ export function registerVoiceRoutes(app: FastifyInstance) {
         speech: sections.join(" "),
         playbooks,
         scriptIds: scripts.map((s) => s.scriptId),
+        recurrenceChecks: recurrenceOffers(),
         apps: LAUNCHABLE_APP_IDS.map((id) => ({ id, label: LAUNCHABLE_APPS[id] })),
         services: CONTROLLABLE_SERVICE_IDS.map((id) => ({ id, label: CONTROLLABLE_SERVICES[id] })),
         detailTopics: [...DETAIL_TOPICS],

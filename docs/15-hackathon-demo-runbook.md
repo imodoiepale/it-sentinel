@@ -40,40 +40,121 @@ The ElevenLabs key goes in `apps/control-plane/.env` by hand.
 
 ## 1. Install on all 7 laptops
 
-Clone the repo on each machine, then run the installer. Do the machines in
-parallel across your team; budget 10 minutes each.
+**One command per laptop.** Open PowerShell on the machine (Start, type
+`powershell`, Enter) and paste this:
 
 ```powershell
-git clone <this repo>; cd it-sentinel
+irm https://raw.githubusercontent.com/imodoiepale/it-sentinel/main/scripts/bootstrap.ps1 | iex
+```
+
+That is the whole thing. No git, no clone, no `cd`. It installs git if the
+machine does not have it (one UAC prompt), clones the repo to
+`%USERPROFILE%\it-sentinel`, and hands over to the installer, which shows its
+disclosure screen, asks you to pick a branch from a numbered menu, and waits
+for you to type `INSTALL`. Safe to run twice: a second run pulls instead of
+cloning. Do the machines in parallel across your team; budget 10 minutes each.
+
+> ### Before that URL works, two things must be true
+>
+> Neither is true as this is written. Check both, or skip to the USB fallback.
+>
+> 1. **`scripts/` has to be on `main`.** It is currently on the
+>    `feat/hackathon-demo-platform` branch only. `origin/main` has no
+>    `scripts/` folder, so the raw URL above returns 404. Merge and push
+>    first, or point the script at another branch with `-Branch`.
+> 2. **The repo has to be readable by the laptop.** `imodoiepale/it-sentinel`
+>    is **private** today, so an unauthenticated laptop gets
+>    `remote: Repository not found`. Either make it public before demo day,
+>    or sign each laptop in to GitHub, or use the USB fallback.
+>
+> If the repo stays private, **use the USB fallback**. It is the more reliable
+> plan for a venue anyway, and it does not depend on the network.
+
+Flags for an unattended run: `-BranchSlug lagos`,
+`-ControlPlaneUrl http://HUB_IP:8787`, `-VncPassword <pw>`. Omit any of them
+and the installer prompts. `iex` cannot take arguments, so use this form
+instead - still one line:
+
+```powershell
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/imodoiepale/it-sentinel/main/scripts/bootstrap.ps1))) -BranchSlug lagos -ControlPlaneUrl http://HUB_IP:8787
+```
+
+`bootstrap.ps1` also takes `-InstallRoot` (default `%USERPROFILE%\it-sentinel`),
+`-Branch`, `-RepoUrl`, and `-NoInstall` (fetch the repo but stop before the
+installer).
+
+If `irm` itself fails with a TLS or "could not create SSL/TLS secure channel"
+error - old Windows builds default to TLS 1.0 - prefix it once:
+
+```powershell
+[Net.ServicePointManager]::SecurityProtocol = 'Tls12'; irm https://raw.githubusercontent.com/imodoiepale/it-sentinel/main/scripts/bootstrap.ps1 | iex
+```
+
+### Fallback A - USB stick or network share, no GitHub needed
+
+**This is the plan to use if the repo is still private on demo day.** It needs
+no internet access to GitHub at all.
+
+On the machine that already has the repo, copy the whole `it-sentinel` folder
+to a USB stick or a share. Skip `node_modules` - the installer runs
+`pnpm install` itself. Then on each laptop:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File D:\it-sentinel\scripts\bootstrap.ps1
+```
+
+`bootstrap.ps1` notices it is already sitting inside a checkout, skips the
+clone entirely, and goes straight to the installer. Or skip bootstrap and run
+the installer directly - it winget-installs git itself, so nothing is lost:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File D:\it-sentinel\scripts\install-sentinel-agent.ps1
+```
+
+To give each laptop its own working copy instead of running off the stick,
+clone *from* the stick - `-RepoUrl` takes a path as happily as a URL:
+
+```powershell
+& ([scriptblock]::Create((gc -Raw D:\it-sentinel\scripts\bootstrap.ps1))) -RepoUrl D:\it-sentinel
+```
+
+A network share works the same way: `-RepoUrl \\HUB\share\it-sentinel`.
+
+### Fallback B - the old multi-step way
+
+If bootstrap misbehaves, this is what it was doing for you:
+
+```powershell
+git clone https://github.com/imodoiepale/it-sentinel.git
+cd it-sentinel
 .\scripts\install-sentinel-agent.ps1
 ```
+
+### What the installer actually does
 
 It does everything in this section and step 4: winget-installs Node LTS,
 PowerShell 7, Git, Chrome and TightVNC, sets the VNC password, opens TCP 5900
 in the firewall, writes `apps/agent-node/.env` for the branch you pick from a
 menu, runs `pnpm install`, and starts the agent. It self-elevates, and it is
-safe to run twice — every step probes before it acts, and it will not stack a
+safe to run twice - every step probes before it acts, and it will not stack a
 second agent process on a re-run.
 
-Flags for an unattended run: `-ControlPlaneUrl http://HUB_IP:8787`,
-`-BranchSlug lagos`, `-VncPassword <pw>`. Omit any of them and it prompts.
-
-> **It asks for the hub URL, so know `HUB_IP` first** (§3). If you install
-> before the hub exists, the agent starts and fails to reach it; fix
+> **It asks for the hub URL, so know `HUB_IP` first** (section 3). If you
+> install before the hub exists, the agent starts and fails to reach it; fix
 > `CONTROL_PLANE_URL` in `apps/agent-node/.env`, then close the agent window and
-> re-run the installer. It will not repoint a running agent — it skips starting
+> re-run the installer. It will not repoint a running agent - it skips starting
 > a second one and warns that the old one is still on the old `.env`.
 
 Two things about it worth knowing before you run it on someone's laptop:
 
 - **It shows a full disclosure and will not move until you type `INSTALL`.**
-  That screen lists exactly what the heartbeat collects — down to event-log
+  That screen lists exactly what the heartbeat collects - down to event-log
   message text, installed software, and the fact that an operator can watch
   the desktop over VNC. Read it out to whoever owns the machine. **Have people
   sign out of anything personal, or use spare machines.**
 - **It starts the agent INTERACTIVELY, not as a service**, and adds a Startup
   shortcut so it comes back at logon. This is the single most important thing
-  in this section — see below.
+  in this section - see below.
 
 **Do NOT install the agent as a Windows service** for this demo. A service runs
 in session 0, where launched apps are invisible on screen: "open Notepad on
@@ -92,10 +173,10 @@ Read-only, changes nothing, exits 0 only if everything passes. It re-checks
 `.env` (branch slug against the seven known slugs, control-plane URL), `pwsh 7`,
 the `tvnserver` service, port 5900 actually listening, the firewall rule, an
 agent process actually running, `/healthz` on the hub, and the primary LAN IPv4
-— i.e. the things that go stale between install time and stage time.
+- i.e. the things that go stale between install time and stage time.
 
 <details>
-<summary><b>Fallback: the manual steps, if the installer fails</b></summary>
+<summary><b>Fallback C: the manual steps, if the installer itself fails</b></summary>
 
 Run **as Administrator**:
 
@@ -112,11 +193,11 @@ pnpm install
 - **PowerShell 7 is mandatory.** The agent shells out to `pwsh`, not
   `powershell`. Verify with `pwsh -v`.
 - **TightVNC**: same password on all 7, port 5900, tick *Register as a system
-  service*, and **allow it through Windows Firewall** — the installer's
+  service*, and **allow it through Windows Firewall** - the installer's
   checkbox is easy to miss and is the single most common reason remote desktop
   fails.
 - Write `apps/agent-node/.env` by hand (step 4) and start the agent from a
-  **normal terminal** — never as a service.
+  **normal terminal** - never as a service.
 
 </details>
 

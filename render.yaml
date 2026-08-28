@@ -24,7 +24,7 @@ services:
       - key: NODE_VERSION
         value: "20"
       - key: SUPABASE_URL
-        value: https://oohuqbxrwsjfgzigefam.supabase.co
+        value: https://ncyerayycwkqytznnkrs.supabase.co
       - key: SUPABASE_SERVICE_ROLE_KEY
         sync: false
       - key: PORT
@@ -51,7 +51,7 @@ services:
       - key: NODE_VERSION
         value: "20"
       - key: NEXT_PUBLIC_SUPABASE_URL
-        value: https://oohuqbxrwsjfgzigefam.supabase.co
+        value: https://ncyerayycwkqytznnkrs.supabase.co
       # Publishable key: browser-safe by design, so committing it is correct.
       - key: NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
         value: sb_publishable_2-Oj-6K0LcV5xAHtqbO7Eg_7IDSN1ki

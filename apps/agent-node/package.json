@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "tsx src/main.ts",
+    "start": "tsx --env-file-if-exists=.env src/main.ts",
     "test": "vitest run",
     "install-service": "tsx src/service-install.ts"
   },

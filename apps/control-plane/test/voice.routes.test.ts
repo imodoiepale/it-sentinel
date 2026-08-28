@@ -14,11 +14,14 @@ import Fastify from "fastify";
  */
 
 const state = vi.hoisted(() => ({
-  branchMatches: [{ id: "site-1", name: "Lagos", slug: "lagos", similarity: 0.9 }] as any[],
+  branchMatches: [{ site_id: "site-1", name: "Lagos", slug: "lagos", similarity: 0.9 }] as any[],
   assets: [{ id: "asset-1", hostname: "LAGOS-POS-01", ip: "192.168.1.11", site_id: "site-1" }] as any[],
   operatorRow: { operator_id: "operator-1" } as any,
   commandRuns: [] as any[],
   telemetry: [] as any[],
+  assetHealth: [] as any[],
+  alerts: [] as any[],
+  incidents: [] as any[],
   dispatched: [] as any[],
   dispatchThrows: null as Error | null,
 }));
@@ -30,13 +33,16 @@ vi.mock("../src/db.js", () => {
       if (name === "site_access") return [state.operatorRow];
       if (name === "command_runs") return state.commandRuns;
       if (name === "telemetry") return state.telemetry;
-      if (name === "asset_health") return [];
+      if (name === "asset_health") return state.assetHealth;
+      if (name === "alerts") return state.alerts;
+      if (name === "incidents") return state.incidents;
       return [];
     };
     const chain: any = {
       select: () => chain,
       eq: () => chain,
       in: () => chain,
+      like: () => chain,
       gte: () => chain,
       order: () => chain,
       limit: () => chain,
@@ -150,10 +156,13 @@ function telemetryRow(overrides: Record<string, unknown> = {}, ageMs = 30_000) {
 }
 
 beforeEach(() => {
-  state.branchMatches = [{ id: "site-1", name: "Lagos", slug: "lagos", similarity: 0.9 }];
+  state.branchMatches = [{ site_id: "site-1", name: "Lagos", slug: "lagos", similarity: 0.9 }];
   state.assets = [{ id: "asset-1", hostname: "LAGOS-POS-01", ip: "192.168.1.11", site_id: "site-1" }];
   state.commandRuns = [];
   state.telemetry = [telemetryRow()];
+  state.alerts = [];
+  state.incidents = [];
+  state.assetHealth = [];
   state.dispatched = [];
   state.dispatchThrows = null;
 });
@@ -162,6 +171,7 @@ const ACTION_ROUTES = [
   ["/v1/voice/fleet", {}],
   ["/v1/voice/branch", { branch: "Lagos" }],
   ["/v1/voice/detail", { branch: "Lagos", topic: "all" }],
+  ["/v1/voice/recurrence", { branch: "Lagos", checkType: "enquest" }],
   ["/v1/voice/capabilities", {}],
   ["/v1/voice/playbooks", {}],
   ["/v1/voice/remediate", { branch: "Lagos", action: "spooler" }],
@@ -253,8 +263,8 @@ describe("service control", () => {
 describe("ambiguous branch names are asked about, never guessed", () => {
   it("names both candidates when similarity is close, and dispatches nothing", async () => {
     state.branchMatches = [
-      { id: "s1", name: "Nyali A", slug: "nyali-a", similarity: 0.81 },
-      { id: "s2", name: "Nyali B", slug: "nyali-b", similarity: 0.79 },
+      { site_id: "s1", name: "Nyali A", slug: "nyali-a", similarity: 0.81 },
+      { site_id: "s2", name: "Nyali B", slug: "nyali-b", similarity: 0.79 },
     ];
     const res = await call("/v1/voice/remediate", { branch: "Nyali", action: "spooler" });
     const body = res.json();
@@ -280,8 +290,8 @@ describe("conversational outcomes reach the agent as HTTP 200", () => {
   // transport must not be able to swallow them.
   it("a disambiguation is 200 so the body is never discarded", async () => {
     state.branchMatches = [
-      { id: "s1", name: "Nyali A", slug: "nyali-a", similarity: 0.81 },
-      { id: "s2", name: "Nyali B", slug: "nyali-b", similarity: 0.79 },
+      { site_id: "s1", name: "Nyali A", slug: "nyali-a", similarity: 0.81 },
+      { site_id: "s2", name: "Nyali B", slug: "nyali-b", similarity: 0.79 },
     ];
     const res = await call("/v1/voice/branch", { branch: "Nyali" });
     expect(res.statusCode).toBe(200);
@@ -567,8 +577,8 @@ describe("get_machine_detail never passes stale data off as current", () => {
 describe("get_machine_detail asks about an ambiguous branch like every other route", () => {
   it("names both candidates and reports on neither", async () => {
     state.branchMatches = [
-      { id: "s1", name: "Nyali A", slug: "nyali-a", similarity: 0.81 },
-      { id: "s2", name: "Nyali B", slug: "nyali-b", similarity: 0.79 },
+      { site_id: "s1", name: "Nyali A", slug: "nyali-a", similarity: 0.81 },
+      { site_id: "s2", name: "Nyali B", slug: "nyali-b", similarity: 0.79 },
     ];
     const res = await call("/v1/voice/detail", { branch: "Nyali", topic: "printer" });
     const body = res.json();
@@ -643,5 +653,210 @@ describe("auth failures carry the same body shape as every other response", () =
     } finally {
       (env as any).VOICE_WEBHOOK_SECRET = configured;
     }
+  });
+});
+
+/**
+ * A resolved incident of the shape recurrence.service.ts reads back, with
+ * the branch embedded the way PostgREST returns a to-one join.
+ */
+function resolvedIncident(branch: string, fix: string | null, success: boolean | null, assetId = "asset-1") {
+  return {
+    ticket_ref: `TKT-${Math.random().toString(36).slice(2, 7)}`,
+    title: `Enquest critical on ${branch}`,
+    resolution_summary: fix,
+    resolution_success: success,
+    opened_at: new Date(Date.now() - 86_400_000).toISOString(),
+    asset_id: assetId,
+    fingerprint: `enquest_sync:${assetId}`,
+    sites: { name: branch },
+  };
+}
+
+/** asset_health as the branch route reads it, red on Enquest. */
+function criticalHealthRow() {
+  return {
+    status: "critical",
+    online: true,
+    ram_usage: 40,
+    disk_free_percent: 50,
+    printer_status: "healthy",
+    enquest_status: "critical",
+    endpoint_security_status: "healthy",
+    assets: { hostname: "LAGOS-POS-01", site_id: "site-1" },
+  };
+}
+
+describe("get_recurrence answers across branches, not just this machine", () => {
+  // The requirement this route exists for: once a similar issue turns up at
+  // a different branch, the agent should already know what fixed it. A
+  // per-asset fingerprint can only ever answer "not on this machine", so
+  // what is asserted here is that history from OTHER branches reaches the
+  // answer at all.
+  it("reports history recorded at other branches", async () => {
+    state.incidents = [
+      resolvedIncident("Nairobi", "restart the Enquest sync service", true, "asset-9"),
+      resolvedIncident("Nairobi", "restart the Enquest sync service", true, "asset-9"),
+      resolvedIncident("Mombasa", "restart the Enquest sync service", true, "asset-7"),
+    ];
+    const body = (await call("/v1/voice/recurrence", { branch: "Lagos", checkType: "enquest" })).json();
+
+    expect(body.timesSeen).toBe(3);
+    expect(body.speech).toContain("Nairobi");
+    expect(body.speech).toContain("Mombasa");
+    expect(body.speech).toContain("restart the Enquest sync service");
+  });
+
+  it("says plainly when the fault is new to this branch but not to the fleet", async () => {
+    state.incidents = [resolvedIncident("Nairobi", "restart the Enquest sync service", true, "asset-9")];
+    const body = (await call("/v1/voice/recurrence", { branch: "Lagos", checkType: "enquest" })).json();
+
+    expect(body.timesSeenAtBranch).toBe(0);
+    expect(body.speech).toMatch(/first time at Lagos/i);
+  });
+
+  it("counts the occurrences at the asking branch separately", async () => {
+    state.incidents = [
+      resolvedIncident("Lagos", "restart the Enquest sync service", true),
+      resolvedIncident("Lagos", "restart the Enquest sync service", true),
+      resolvedIncident("Nairobi", "restart the Enquest sync service", true, "asset-9"),
+    ];
+    const body = (await call("/v1/voice/recurrence", { branch: "Lagos", checkType: "enquest" })).json();
+    expect(body.timesSeenAtBranch).toBe(2);
+    expect(body.speech).toContain("here at Lagos");
+  });
+});
+
+describe("get_recurrence never invents history it does not have", () => {
+  // Overclaiming here is worse than a modest answer: the operator acts on
+  // the number, and a fabricated one sends them to the wrong fix with
+  // confidence.
+  it("admits there is no history rather than implying a first-time fault is known", async () => {
+    state.incidents = [];
+    const body = (await call("/v1/voice/recurrence", { branch: "Lagos", checkType: "enquest" })).json();
+
+    expect(body.timesSeen).toBe(0);
+    expect(body.suggestedFix).toBeNull();
+    expect(body.speech).toMatch(/no resolved history/i);
+    expect(body.speech).toMatch(/first time/i);
+    expect(body.speech).not.toMatch(/\d+ percent/);
+  });
+
+  it("does not quote a percentage off a handful of attempts", async () => {
+    state.incidents = [
+      resolvedIncident("Nairobi", "restart the Enquest sync service", true, "asset-9"),
+      resolvedIncident("Nairobi", "restart the Enquest sync service", true, "asset-9"),
+    ];
+    const body = (await call("/v1/voice/recurrence", { branch: "Lagos", checkType: "enquest" })).json();
+
+    expect(body.speech).not.toMatch(/percent/);
+    expect(body.speech).toMatch(/tried 2 times and worked every time/i);
+  });
+
+  it("quotes a rate only once there are enough graded attempts to mean something", async () => {
+    state.incidents = [
+      resolvedIncident("Nairobi", "restart the Enquest sync service", true, "asset-9"),
+      resolvedIncident("Nairobi", "restart the Enquest sync service", true, "asset-9"),
+      resolvedIncident("Mombasa", "restart the Enquest sync service", true, "asset-7"),
+      resolvedIncident("Mombasa", "restart the Enquest sync service", false, "asset-7"),
+    ];
+    const body = (await call("/v1/voice/recurrence", { branch: "Lagos", checkType: "enquest" })).json();
+
+    expect(body.suggestedFixHistory).toMatchObject({ attempts: 4, succeeded: 3 });
+    expect(body.speech).toContain("worked 3 of the 4 times");
+    expect(body.speech).toContain("75 percent");
+  });
+
+  it("says there is nothing proven to repeat when no recorded fix worked", async () => {
+    state.incidents = [
+      resolvedIncident("Nairobi", "rebooted the machine", false, "asset-9"),
+      resolvedIncident("Mombasa", "rebooted the machine", false, "asset-7"),
+    ];
+    const body = (await call("/v1/voice/recurrence", { branch: "Lagos", checkType: "enquest" })).json();
+
+    expect(body.suggestedFix).toBeNull();
+    expect(body.speech).toMatch(/nothing proven to repeat/i);
+  });
+
+  it("rates the suggested fix on its own record, not on the class average", async () => {
+    // Two different fixes with different track records. Averaging them
+    // would attach the failing fix's misses to the one being recommended.
+    state.incidents = [
+      resolvedIncident("Nairobi", "restart the Enquest sync service", true, "asset-9"),
+      resolvedIncident("Mombasa", "rebooted the machine", false, "asset-7"),
+      resolvedIncident("Mombasa", "rebooted the machine", false, "asset-7"),
+    ];
+    const body = (await call("/v1/voice/recurrence", { branch: "Lagos", checkType: "enquest" })).json();
+
+    expect(body.suggestedFix).toBe("restart the Enquest sync service");
+    expect(body.suggestedFixHistory).toMatchObject({ attempts: 1, succeeded: 1 });
+    expect(body.successRatePercent).toBe(33);
+  });
+});
+
+describe("get_recurrence resolves what to look up the way an operator would ask", () => {
+  it("falls back to the branch's newest open alert when no check is named", async () => {
+    state.alerts = [{ fingerprint: "endpoint_security:asset-1", title: "Endpoint protection critical on LAGOS-POS-01" }];
+    state.incidents = [];
+    const body = (await call("/v1/voice/recurrence", { branch: "Lagos" })).json();
+
+    expect(body.checkType).toBe("endpoint_security");
+    expect(body.liveFault).toContain("Endpoint protection critical");
+  });
+
+  it("asks which check rather than guessing when nothing is alerting", async () => {
+    state.alerts = [];
+    const body = (await call("/v1/voice/recurrence", { branch: "Lagos" })).json();
+
+    expect(body.timesSeen).toBeUndefined();
+    expect(body.speech).toMatch(/nothing is alerting/i);
+    expect(body.speech).toContain("the Enquest sync check");
+  });
+
+  it("offers the checks it has instead of pattern-matching an unknown one", async () => {
+    const body = (await call("/v1/voice/recurrence", { branch: "Lagos", checkType: "cosmic rays" })).json();
+    expect(body.timesSeen).toBeUndefined();
+    expect(body.speech).toMatch(/cosmic rays/);
+    expect(body.checks.length).toBeGreaterThan(0);
+  });
+
+  it("asks about an ambiguous branch like every other route", async () => {
+    state.branchMatches = [
+      { site_id: "s1", name: "Nyali A", slug: "nyali-a", similarity: 0.81 },
+      { site_id: "s2", name: "Nyali B", slug: "nyali-b", similarity: 0.79 },
+    ];
+    const res = await call("/v1/voice/recurrence", { branch: "Nyali", checkType: "enquest" });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().status).toBe(409);
+    expect(res.json().timesSeen).toBeUndefined();
+  });
+});
+
+describe("get_branch_status surfaces recurrence at the moment the fault is reported", () => {
+  // The most useful moment for "this is the fourth time" is when the fault
+  // is first spoken, not two turns later if the operator thinks to ask.
+  it("appends the history and the previous fix to a fault report", async () => {
+    state.assetHealth = [criticalHealthRow()];
+    state.alerts = [{ fingerprint: "enquest_sync:asset-1", title: "Enquest critical on LAGOS-POS-01" }];
+    state.incidents = [
+      resolvedIncident("Nairobi", "restart the Enquest sync service", true, "asset-9"),
+      resolvedIncident("Mombasa", "restart the Enquest sync service", true, "asset-7"),
+    ];
+
+    const body = (await call("/v1/voice/branch", { branch: "Lagos" })).json();
+    expect(body.speech).toContain("Enquest down");
+    expect(body.speech).toMatch(/isn't new/i);
+    expect(body.speech).toContain("restart the Enquest sync service");
+    expect(body.recurrence.timesSeen).toBe(2);
+  });
+
+  it("stays quiet about history when there is none, rather than padding the answer", async () => {
+    state.assetHealth = [criticalHealthRow()];
+    state.alerts = [{ fingerprint: "enquest_sync:asset-1", title: "Enquest critical on LAGOS-POS-01" }];
+    state.incidents = [];
+
+    const body = (await call("/v1/voice/branch", { branch: "Lagos" })).json();
+    expect(body.speech).not.toMatch(/isn't new|last fix|nothing proven/i);
+    expect(body.recurrence.timesSeen).toBe(0);
   });
 });
