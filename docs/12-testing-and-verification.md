@@ -2,11 +2,11 @@
 
 ## The headline number
 
-**76/76 automated tests passing** across the workspace, plus a full `next build` and `tsc --noEmit` clean pass on every TypeScript package. This isn't a claim — here's exactly where each number comes from and what it actually proves.
+**76/76 automated tests passing** across the workspace, and a full `next build` and `tsc --noEmit` clean pass on every TypeScript package. This isn't a claim here's exactly where each number comes from and what it actually proves.
 
 | Package | Tests | What they prove |
 |---|---|---|
-| `packages/contracts` | 4 | A realistic heartbeat fixture validates; missing identity fields and out-of-range percentages are rejected; the email contract structurally cannot carry message content |
+| `packages/contracts` | 4 | A realistic heartbeat fixture that validates; missing identity fields and out-of-range percentages are rejected; the email contract structurally cannot carry message content |
 | `apps/control-plane` | 7 | Role→tier ceilings match the plan exactly (auditor=T0, only it_manager reaches T5); the T6 deny-list constant contains the plan's non-negotiables; the daily report formatter matches the plan's fixed-width text shape, including correctly omitting the CRITICAL section when nothing's critical |
 | `apps/agent-less` | 2 | The PowerShell-output-to-heartbeat transform produces contract-valid results; a single offline printer correctly flags overall printer status as critical |
 | `apps/agent-node` | **26** | The full adversarial suite — see below |
