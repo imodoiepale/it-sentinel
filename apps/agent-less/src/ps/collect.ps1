@@ -123,7 +123,12 @@ $result = [ordered]@{
     availableMb = [math]::Round($os.FreePhysicalMemory / 1KB)
     usagePercent = [math]::Round((1 - ($os.FreePhysicalMemory * 1KB) / $cs.TotalPhysicalMemory) * 100, 1)
   }
-  storage = [ordered]@{ volumes = $volumes }
+  # @() is load-bearing. ConvertTo-Json serialises a one-element collection
+  # as a bare object rather than an array, so a machine with a single disk
+  # sent storage.volumes as an object and failed contract validation - while
+  # a two-disk machine passed. printers and services already had this; only
+  # volumes was missed, and only single-disk machines ever showed it.
+  storage = [ordered]@{ volumes = @($volumes) }
   windows = [ordered]@{
     version = $os.Caption
     build = $os.BuildNumber

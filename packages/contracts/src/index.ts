@@ -4,3 +4,4 @@ export * from "./command.js";
 export * from "./session.js";
 export * from "./policy.js";
 export * from "./vocabulary.js";
+export * from "./wire-null.js";

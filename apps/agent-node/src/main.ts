@@ -5,7 +5,7 @@ import { dirname, join } from "node:path";
 import { readFileSync } from "node:fs";
 import { networkInterfaces } from "node:os";
 import { createSocket } from "node:dgram";
-import { CommandResult, HeartbeatPayload } from "@it-sentinel/contracts";
+import { CommandResult, HeartbeatPayload, stripWireNulls } from "@it-sentinel/contracts";
 import { executeCommand, runPowerShellReal, type ExecutorDeps, type ScriptManifest } from "./exec/executor.js";
 
 /**
@@ -275,7 +275,9 @@ function toHeartbeat(detail: Record<string, unknown>): HeartbeatPayload | null {
     user: detail.user,
   };
 
-  const parsed = HeartbeatPayload.safeParse(candidate);
+  // PowerShell emits null for every absent value; the contract's optional
+  // fields accept a missing key but not an explicit null.
+  const parsed = HeartbeatPayload.safeParse(stripWireNulls(candidate));
   if (!parsed.success) {
     console.error("[agent-node] heartbeat failed contract validation:", parsed.error.issues);
     return null;
