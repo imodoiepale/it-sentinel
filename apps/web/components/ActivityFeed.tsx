@@ -94,7 +94,7 @@ export function ActivityFeed({ assets }: Props) {
     const hostnameFor = (assetId: string) =>
       assetsRef.current.find((a) => a.assetId === assetId)?.hostname ?? "a machine";
 
-    const channel = subscribeToFleetUpdates({
+    const sub = subscribeToFleetUpdates({
       onAssetHealthChange: (row) => {
         const assetId = String(row.asset_id ?? "");
         if (!assetId) return;
@@ -170,12 +170,15 @@ export function ActivityFeed({ assets }: Props) {
     // Realtime's own join state, not an assumption. A panel that says "live"
     // while the socket is down is worse than one that admits it is not — the
     // whole claim being made here is that the screen reflects the database.
-    const poll = setInterval(() => setConnected(channel.state === "joined"), 1000);
-    setConnected(channel.state === "joined");
+    // The channel is shared across every subscriber now, so read its state
+    // off the subscription handle rather than assuming this component owns it.
+    const isJoined = () => sub.channel?.state === "joined";
+    const poll = setInterval(() => setConnected(isJoined()), 1000);
+    setConnected(isJoined());
 
     return () => {
       clearInterval(poll);
-      unsubscribe(channel);
+      unsubscribe(sub);
     };
   }, []);
 
