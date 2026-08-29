@@ -55,14 +55,19 @@ let myAssetId: string | null = null;
  * and the agent published an address the relay could never reach.
  */
 const VIRTUAL_RANGES = [
-  /^192\.168\.56\./, // VirtualBox host-only
+  /^192\.168\.56\./, // VirtualBox host-only, the default and the one that bit us
   /^192\.168\.99\./, // docker-machine / minikube
-  /^172\.1[7-9]\./, // Docker bridge networks
-  /^172\.2[0-9]\./,
-  /^172\.3[0-1]\./,
+  /^172\.17\./, // docker0, Docker's default bridge specifically
   /^169\.254\./, // APIPA: no DHCP answered, routes nowhere
-  /^100\.64\./, // CGNAT / some VPN clients
 ];
+
+// Deliberately NOT blocked: the rest of 172.16.0.0/12. An earlier version
+// excluded 172.16-172.31 wholesale to catch Docker networks and thereby
+// rejected 172.20.10.x — which is the iPhone personal-hotspot range, i.e.
+// exactly the network this fleet runs on. RFC1918 says that whole block is
+// ordinary private space; only Docker's own default bridge is predictable
+// enough to name. Guessing "virtual" from a prefix is what the routing probe
+// exists to avoid, so the blocklist stays small and the router decides.
 
 function nameLooksVirtual(name: string): boolean {
   return /vEthernet|Loopback|VirtualBox|VMware|Hyper-V|Docker|WSL|TAP|Tailscale|ZeroTier/i.test(name);
@@ -169,7 +174,29 @@ async function runCollectScript(): Promise<Record<string, unknown> | null> {
     const trimmed = stdout.trim();
     return trimmed ? JSON.parse(trimmed) : null;
   } catch (err) {
-    console.error("[agent-node] collect.ps1 failed:", (err as Error).message);
+    // execFile's Error.message is just the command line — it drops the
+    // script's own stderr, which is the only part that says WHY. Reporting
+    // "Command failed: pwsh -File collect.ps1" and nothing else sent us
+    // debugging blind once already.
+    const e = err as NodeJS.ErrnoException & { stderr?: string; stdout?: string; code?: unknown };
+
+    if (e.code === "ENOENT") {
+      console.error(
+        "[agent-node] pwsh not found. The collector needs PowerShell 7, not Windows PowerShell 5.1.\n" +
+          "  Install it:  winget install -e --id Microsoft.PowerShell --source winget\n" +
+          "  Then open a NEW terminal — PATH is not refreshed in this one — and start the agent again.",
+      );
+      return null;
+    }
+
+    const stderr = (e.stderr ?? "").trim();
+    const stdout = (e.stdout ?? "").trim();
+    console.error("[agent-node] collect.ps1 failed:", e.message);
+    if (stderr) console.error("[agent-node] collect.ps1 stderr:\n" + stderr.slice(0, 2000));
+    // A non-JSON stdout usually means the script emitted a warning or a
+    // prompt before its payload, which is worth seeing in full.
+    else if (stdout) console.error("[agent-node] collect.ps1 stdout (not JSON):\n" + stdout.slice(0, 800));
+    else console.error("[agent-node] collect.ps1 produced no output at all.");
     return null;
   }
 }
