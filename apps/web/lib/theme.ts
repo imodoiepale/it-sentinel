@@ -64,7 +64,7 @@ export const ui = {
   card: "rounded-cards border border-cloud bg-snow p-card",
   cardFlush:
     "min-w-0 w-full overflow-clip rounded-[36px] border border-cloud bg-snow",
-  photo: "block aspect-[4/5] w-full max-w-full object-cover object-center",
+  photo: "block aspect-[3/2] w-full max-w-full object-cover object-center",
   photoWell: "relative w-full overflow-clip bg-mist",
   breakthrough: "block h-36 w-full max-w-full object-cover object-center sm:h-40",
   cardDark: "rounded-cards bg-slate p-6 text-snow",

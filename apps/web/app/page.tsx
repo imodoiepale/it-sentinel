@@ -23,7 +23,6 @@ export const metadata = {
 const CAPABILITY_CARDS = [
   {
     title: "Talk to it",
-    badge: "Live",
     image:
       "https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=800&h=1000&q=80",
     alt: "Quiet open office with long desks",
@@ -49,11 +48,7 @@ const PAINS = [
   "A logged-in tab is not a human.",
 ];
 
-const STATS = [
-  { value: "7", label: "branches" },
-  { value: "15s", label: "heartbeat" },
-  { value: "T6", label: "always denied" },
-];
+
 
 export default async function LandingPage() {
   const sites = await fetchSites(3_000);
@@ -64,7 +59,6 @@ export default async function LandingPage() {
       <main>
         <Hero />
         <CapabilityBand />
-        <StatsRow />
         <FleetSection sites={sites} />
         <GovernanceSection />
         <Breakthrough />
@@ -79,14 +73,11 @@ function Hero() {
   return (
     <div className={`${ui.page} pt-6 pb-12`}>
       <div className="bg-obsidian rounded-[48px] px-6 py-20 sm:py-32 flex flex-col items-center text-center mx-auto w-full relative overflow-hidden">
-        <EmberBadge>Live</EmberBadge>
         <h1 className="mt-8 max-w-4xl text-pretty text-[44px] font-semibold leading-[1.08] text-snow sm:text-[64px] lg:text-[80px] lg:leading-[1.02]">
-          Ask what&rsquo;s broken.
-          <br />
-          Fix it from here.
+          The agentic command center for IT.
         </h1>
         <p className="mt-6 max-w-lg text-[18px] leading-[1.5] font-normal text-mist">
-          Voice, remote desktop, and the live fleet — one policy check.
+          Manage your entire fleet from one unified interface. Voice commands, remote desktop, and policy checks built for AI-native teams.
         </p>
         <div className="mt-10 flex flex-wrap items-center justify-center gap-3">
           <ButtonLink href="/console" className="!bg-snow !text-obsidian hover:!bg-cloud border border-transparent">
@@ -113,20 +104,7 @@ function CapabilityBand() {
   );
 }
 
-function StatsRow() {
-  return (
-    <div className={ui.page}>
-      <div className="grid grid-cols-1 gap-8 border-y border-cloud py-12 sm:grid-cols-3">
-        {STATS.map((s) => (
-          <div key={s.label} className="flex flex-wrap items-baseline gap-3">
-            <span className={ui.stat}>{s.value}</span>
-            <span className={ui.statLabel}>{s.label}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
+
 
 function FleetSection({ sites }: { sites: Awaited<ReturnType<typeof fetchSites>> }) {
   return (
