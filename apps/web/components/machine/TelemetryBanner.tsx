@@ -25,7 +25,7 @@ export function TelemetryBanner({ telemetry, hostname }: { telemetry: MachineTel
 
   if (!payload) {
     return (
-      <div role="status" className="px-4 py-2 border-b border-white/10 text-xs text-warning">
+      <div role="status" className="px-4 py-2 border-b border-line text-xs text-warning-ink">
         <span className="sr-only">Warning: </span>
         {hostname} has never sent telemetry. Nothing below is measured — its agent may not be running.
       </div>
@@ -37,7 +37,7 @@ export function TelemetryBanner({ telemetry, hostname }: { telemetry: MachineTel
       <div
         role="status"
         aria-live="off"
-        className="flex flex-wrap items-center gap-x-3 px-4 py-1.5 border-b border-white/10 text-xs text-muted"
+        className="flex flex-wrap items-center gap-x-3 px-4 py-1.5 border-b border-line text-xs text-muted"
       >
         {/* aria-live is off on purpose: this line changes every few seconds
             as the age ticks up, and announcing "22 seconds old" on a loop
@@ -56,7 +56,7 @@ export function TelemetryBanner({ telemetry, hostname }: { telemetry: MachineTel
   return (
     <div
       role="status"
-      className="px-4 py-2 border-b border-warning/40 bg-warning/10 text-xs text-warning"
+      className="px-4 py-2 border-b border-warning/40 bg-warning/10 text-xs text-warning-ink"
     >
       <span className="sr-only">Warning: </span>
       <strong className="font-semibold">Not live.</strong> The newest telemetry from {hostname} is{" "}

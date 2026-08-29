@@ -47,11 +47,16 @@ export function NoVncCanvas({ relayUrl, mode }: Props) {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="px-3 py-1.5 bg-critical/10 border-b border-critical/30 text-xs flex items-center justify-between shrink-0">
-        <span>
-          ● Session being audited{mode === "view" ? " — view only" : ""}
+      {/*
+        The audit notice cannot be dismissed and cannot be quiet. It carries
+        the critical ink rather than inheriting body colour so it stays a
+        warning on a white page as much as on a black one.
+      */}
+      <div className="px-3 py-1.5 bg-critical/10 border-b border-critical/40 text-xs flex items-center justify-between gap-3 shrink-0">
+        <span className="font-medium text-critical-ink">
+          <span aria-hidden>● </span>Session being audited{mode === "view" ? " — view only" : ""}
         </span>
-        <span className="text-gray-500">
+        <span className="text-muted">
           {status === "connecting" && "Connecting…"}
           {status === "connected" && "Connected"}
           {status === "disconnected" && "Disconnected"}

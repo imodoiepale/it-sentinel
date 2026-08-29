@@ -10,7 +10,7 @@ over their shoulder reading a runbook aloud.
 
 ## 1. The short version
 
-Sign in to the console and open **`/enroll`**. Pick a branch. Copy the command.
+Open **`/enroll`** — no sign-in, see §5.1. Pick a branch. Copy the command.
 Paste it into Windows PowerShell on the laptop.
 
 The page fills in the branch and the hub for you, so what you copy looks like
@@ -273,10 +273,10 @@ decoding is part of what is being tested.
 
 ## 5. Security
 
-### 5.1 What is behind login, and what is not
+### 5.1 The page is public, and so are the routes
 
-**The `/enroll` page is behind operator login.** The `/v1/enroll/*` routes are
-not. That split is deliberate.
+**Neither `/enroll` nor `/v1/enroll/*` requires a login.** Everything else in
+the console does.
 
 The routes serve non-secret text. Every one of those `.ps1` files is in a
 public repo; the archive is a subset of the same. There is no credential in
@@ -287,10 +287,28 @@ PowerShell window, on a machine with nothing installed on it and no way to
 present a credential, would buy no confidentiality and cost the entire
 premise.
 
-The page is gated anyway, because it is not the *scripts* that are worth
-knowing — it is the combination of which branch slugs exist and which hub to
-point at. That is precisely the reconnaissance needed to exercise the gap in
-§5.2, and there is no reason to publish it.
+**The page was gated for a while, and that was wrong.** The argument was that
+it is not the *scripts* that are worth knowing but the combination of which
+branch slugs exist and which hub to point at — the reconnaissance needed to
+exercise §5.2. Three things kill it:
+
+1. **The repo is public.** `bootstrap.ps1`, the seven slugs and the hub URL
+   are all readable on GitHub by anyone who looks. The gate withheld nothing
+   that was not already published, so it bought no confidentiality either.
+2. **The routes it protected were never protected.**
+   `GET /v1/enroll/bootstrap.ps1` and `GET /v1/enroll/branches` are
+   unauthenticated by necessity, and stay that way. The login sat in front of
+   the *instructions* while the thing they instruct you to run stayed open —
+   which is a speed bump for a reader and none at all for a script.
+3. **It locked out exactly the people it was for.** A teammate enrolling their
+   laptop has no operator account; that is the normal case, not the edge one.
+   The landing page's own "Enroll a machine" button bounced every anonymous
+   visitor to `/login`, where they could go no further.
+
+A gate that costs the primary user their whole path and costs an attacker one
+`git clone` is not a security control. What it never fixed is §5.2, and
+removing it changes nothing there — the fix for that is a credential on the
+agent-facing routes, not a session cookie on a page of instructions.
 
 ### 5.2 Known limitation: `POST /v1/heartbeat` has no authentication
 
@@ -302,9 +320,10 @@ The row lands with an `asset.auto_provisioned` audit entry and then appears in
 the console like any other machine.
 
 This is not new, and the enrollment page does not create it. What the page
-does is make it materially easier to *discover*: it publishes the hub URL and
-the exact set of valid slugs in one place. Gating the page behind operator
-login is a speed bump on that discovery, not a fix.
+does is put the hub URL and the exact set of valid slugs in one convenient
+place — but both are already in the public repo, so the page changes how long
+the discovery takes and nothing about whether it is possible. That is why
+§5.1 stopped pretending a login on it was a control.
 
 What it is not: a remote-control hole. A rogue machine that provisions itself
 cannot *dispatch* anything — `POST /v1/commands` runs through
@@ -342,10 +361,15 @@ oversight.
 ### 5.3 What the page tells people, honestly
 
 `/enroll` summarises what the installer does — Node, PowerShell 7, Git,
-Chrome, TightVNC, inbound TCP 5900, a scheduled task — and says in as many
-words that **an operator can watch and control the desktop**, that every
-session is audit-logged against a named operator, and that a personal laptop
-somebody would not want watched should not be enrolled.
+Chrome, TightVNC, inbound TCP 5900, a startup entry — what each heartbeat
+carries and what it does not, and says in as many words that **an operator can
+watch and control the desktop**, that every session is audit-logged against a
+named operator, and that a personal laptop somebody would not want watched
+should not be enrolled.
+
+Now that the page is public (§5.1) that honesty is doing more work, not less:
+it is read by people who have not seen the installer's disclosure and have no
+console account to go and look at.
 
 It summarises rather than duplicates. The installer's own on-screen
 disclosure is the authoritative one, and the page says so: two copies of the

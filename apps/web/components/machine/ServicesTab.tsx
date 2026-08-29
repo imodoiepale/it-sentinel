@@ -43,7 +43,7 @@ export function ServicesTab({ payload }: { payload: TelemetrySnapshot }) {
                 <table className="w-full text-sm">
                   <caption className="sr-only">Watched Windows services and their states</caption>
                   <thead>
-                    <tr className="border-b border-white/10">
+                    <tr className="border-b border-line">
                       <th scope="col" className={TH}>
                         Service
                       </th>
@@ -67,7 +67,7 @@ export function ServicesTab({ payload }: { payload: TelemetrySnapshot }) {
                         const violating = s.expectedState === "running" && s.actualState !== "running";
                         return (
                           <tr key={s.name} className={TR}>
-                            <th scope="row" className={`${TD} font-normal text-left ${violating ? "text-critical-ink" : "text-gray-200"}`}>
+                            <th scope="row" className={`${TD} font-normal text-left ${violating ? "text-critical-ink" : "text-ink-soft"}`}>
                               {s.name}
                             </th>
                             <td className={`${TD} text-muted`}>{s.expectedState}</td>

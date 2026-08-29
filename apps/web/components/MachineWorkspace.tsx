@@ -166,7 +166,7 @@ export function MachineWorkspace({ assetId, hostname, operatorId, onClose }: Pro
     if (!payload) {
       return (
         <div className="p-8 max-w-2xl">
-          <p className="text-sm text-gray-200">No telemetry has ever arrived from {hostname}.</p>
+          <p className="text-sm text-ink-soft">No telemetry has ever arrived from {hostname}.</p>
           <p className="mt-2 text-sm text-muted">
             Nothing on this tab is unavailable because it is unbuilt — it is unavailable because this
             machine has not reported. Check that the agent is installed and running on it.
@@ -182,15 +182,15 @@ export function MachineWorkspace({ assetId, hostname, operatorId, onClose }: Pro
       className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6"
       onClick={onClose}
     >
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-[2px]" aria-hidden />
+      <div className="absolute inset-0 bg-scrim/70 backdrop-blur-[2px]" aria-hidden />
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby="machine-workspace-title"
-        className="relative w-[min(96vw,80rem)] h-[min(90vh,56rem)] bg-[#0b0f14] border border-white/10 rounded-xl flex flex-col overflow-hidden shadow-2xl shadow-black/50"
+        className="relative w-[min(96vw,80rem)] h-[min(90vh,56rem)] bg-canvas border border-line rounded-xl flex flex-col overflow-hidden shadow-2xl shadow-scrim/40"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between gap-4 px-5 py-3.5 border-b border-white/10 bg-[#080b0f]">
+        <div className="flex items-center justify-between gap-4 px-5 py-3.5 border-b border-line bg-panel">
           <div className="min-w-0">
             <h2 id="machine-workspace-title" className="font-semibold truncate tracking-tight">
               {hostname}
@@ -204,19 +204,19 @@ export function MachineWorkspace({ assetId, hostname, operatorId, onClose }: Pro
           <button
             type="button"
             onClick={onClose}
-            className="text-gray-500 hover:text-white shrink-0 rounded-md px-2 py-1 text-sm"
+            className="text-muted hover:text-ink shrink-0 rounded-md px-2 py-1 text-sm"
             aria-label={`Close ${hostname}`}
           >
             Close
           </button>
         </div>
 
-        <div className="flex border-b border-white/10 overflow-x-auto shrink-0 bg-[#080b0f]/80">
+        <div className="flex border-b border-line overflow-x-auto shrink-0 bg-panel/80">
           {TAB_GROUPS.map((group, gi) => (
             <div key={group.label} className="flex items-stretch shrink-0">
-              {gi > 0 && <div className="w-px bg-white/10 mx-1 my-2" aria-hidden />}
+              {gi > 0 && <div className="w-px bg-line mx-1 my-2" aria-hidden />}
               <div className="flex flex-col justify-end">
-                <span className="px-3 pt-1.5 text-[10px] uppercase tracking-wider text-gray-600">{group.label}</span>
+                <span className="px-3 pt-1.5 text-[10px] uppercase tracking-wider text-muted">{group.label}</span>
                 <div className="flex">
                   {group.tabs.map((tab) => (
                     <button
@@ -226,8 +226,8 @@ export function MachineWorkspace({ assetId, hostname, operatorId, onClose }: Pro
                       aria-current={activeTab === tab ? "page" : undefined}
                       className={`px-3 py-2 text-sm whitespace-nowrap border-b-2 ${
                         activeTab === tab
-                          ? "border-healthy-ink text-white"
-                          : "border-transparent text-gray-500 hover:text-gray-300"
+                          ? "border-healthy-ink text-ink"
+                          : "border-transparent text-muted hover:text-ink"
                       }`}
                     >
                       {tab}
@@ -247,8 +247,8 @@ export function MachineWorkspace({ assetId, hostname, operatorId, onClose }: Pro
               <NoVncCanvas relayUrl={relayUrl} mode="control" />
             ) : (
               <div className="h-full flex items-center justify-center p-8">
-                <div className="max-w-lg rounded-xl border border-white/10 bg-white/[0.03] p-6">
-                  <h3 className="text-sm font-medium text-gray-100">No active session</h3>
+                <div className="max-w-lg rounded-xl border border-line bg-surface p-6">
+                  <h3 className="text-sm font-medium text-ink">No active session</h3>
                   <p className="mt-2 text-sm text-muted leading-relaxed">
                     Requesting one grants a single-use, audited connection — the password is never sent to
                     this browser.
@@ -258,7 +258,7 @@ export function MachineWorkspace({ assetId, hostname, operatorId, onClose }: Pro
                       type="button"
                       onClick={() => requestRemoteSession("control")}
                       disabled={requesting}
-                      className="px-3.5 py-2 rounded-md bg-healthy/90 hover:bg-healthy text-black text-sm font-medium disabled:opacity-50"
+                      className="ui-button ui-button-sm ui-button-primary"
                     >
                       {requesting ? "Requesting…" : "Start remote session"}
                     </button>
@@ -266,7 +266,7 @@ export function MachineWorkspace({ assetId, hostname, operatorId, onClose }: Pro
                       type="button"
                       onClick={() => requestRemoteSession("view")}
                       disabled={requesting}
-                      className="px-3.5 py-2 rounded-md bg-white/10 hover:bg-white/15 text-sm disabled:opacity-50"
+                      className="ui-button ui-button-sm ui-button-secondary"
                     >
                       View only
                     </button>
@@ -280,8 +280,8 @@ export function MachineWorkspace({ assetId, hostname, operatorId, onClose }: Pro
 
           {activeTab === "Cameras" && (
             <div className="h-full flex items-center justify-center p-8">
-              <div className="max-w-lg rounded-xl border border-white/10 bg-white/[0.03] p-6">
-                <h3 className="text-sm font-medium text-gray-100">Camera on the far end</h3>
+              <div className="max-w-lg rounded-xl border border-line bg-surface p-6">
+                <h3 className="text-sm font-medium text-ink">Camera on the far end</h3>
                 <p className="mt-2 text-sm text-muted leading-relaxed">
                   Opens the Windows Camera app on {hostname}. Nothing is recorded and no image is sent
                   anywhere — the window appears on that machine for the person sitting at it.
@@ -290,7 +290,7 @@ export function MachineWorkspace({ assetId, hostname, operatorId, onClose }: Pro
                   type="button"
                   onClick={openCamera}
                   disabled={openingCamera}
-                  className="mt-5 px-3.5 py-2 rounded-md bg-healthy/90 hover:bg-healthy text-black text-sm font-medium disabled:opacity-50"
+                  className="ui-button ui-button-sm ui-button-primary mt-5"
                 >
                   {openingCamera ? "Opening…" : "Open camera on this machine"}
                 </button>

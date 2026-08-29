@@ -34,7 +34,7 @@ export function CheckHistory({ checks, emptyText }: { checks: CheckRow[]; emptyT
       <table className="w-full text-sm">
         <caption className="sr-only">Check results recorded against this machine, newest first</caption>
         <thead>
-          <tr className="border-b border-white/10">
+          <tr className="border-b border-line">
             <th scope="col" className={TH}>
               When
             </th>
@@ -53,13 +53,13 @@ export function CheckHistory({ checks, emptyText }: { checks: CheckRow[]; emptyT
           {checks.map((c) => (
             <tr key={c.id} className={TR}>
               <td className={`${TD} text-muted whitespace-nowrap`}>{formatTimestamp(c.checkedAt)}</td>
-              <td className={`${TD} text-gray-300`}>{c.checkType.replace(/_/g, " ")}</td>
+              <td className={`${TD} text-ink-soft`}>{c.checkType.replace(/_/g, " ")}</td>
               <td className={TD}>
                 <Pill tone={checkTone(c.status)}>{c.status}</Pill>
                 {/* faultClass "none" is not a fault, so it is not rendered as
                     one — showing it would read as a second status word. */}
                 {c.faultClass && c.faultClass !== "none" && (
-                  <span className="ml-1.5 text-xs text-warning">{c.faultClass.replace(/_/g, " ")}</span>
+                  <span className="ml-1.5 text-xs text-warning-ink">{c.faultClass.replace(/_/g, " ")}</span>
                 )}
               </td>
               <td className={`${TD} text-muted`}>{summariseDetail(c.detail) || "—"}</td>

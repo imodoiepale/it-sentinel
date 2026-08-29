@@ -2,8 +2,75 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+  The palette. Two blocks, one per theme, and nothing else in the app knows a
+  hex value — tailwind.config.ts maps each variable to a semantic utility and
+  components use the utility.
+
+  Channels are space-separated RGB so `bg-critical/10` still works; see the
+  config for why.
+
+  Every ratio below was computed, not eyeballed (scripts/… is not in the repo;
+  the numbers are recorded here so the next person changing a value knows what
+  floor they have to clear). Text must reach 4.5:1 on every ground it is
+  allowed on. Status dots are graphics and must reach 3:1.
+*/
+
 :root {
-  color-scheme: dark;
+  /*
+    LIGHT. The alternative, never the default — the class strategy plus the
+    pre-paint script in layout.tsx mean these values apply only when <html>
+    is NOT .dark, which requires either a stored choice or an OS that has
+    explicitly asked for light.
+
+    Grounds run the other way from dark: canvas is the brightest thing and
+    the chrome is tinted, so a sidebar still reads as chrome rather than as
+    a hole in the page.
+  */
+  color-scheme: light;
+
+  --canvas: 255 255 255;
+  --panel: 244 247 250;
+  --surface: 246 248 251;
+  --surface-2: 234 239 245;
+  --surface-3: 219 227 236;
+  --scrim: 15 23 42;
+
+  --line-soft: 236 239 243;
+  --line: 221 227 234;
+  --line-strong: 194 203 214;
+
+  --ink: 15 23 32; /* 18.05:1 on canvas, 13.93:1 on surface-3 */
+  --ink-soft: 61 72 84; /*  9.32:1 on canvas,  7.19:1 on surface-3 */
+  --muted: 87 97 111; /*  6.28:1 on canvas,  4.85:1 on surface-3 */
+  --on-solid: 255 255 255;
+
+  /*
+    The light-mode status values are NOT the dark ones. A red tuned to sit on
+    near-black is a pale wash on white — #f87171 as text on white is 2.5:1,
+    which is the failure mode this whole file exists to prevent. Each fill is
+    dark enough to carry white text, and each ink is darker still.
+  */
+  --healthy: 15 118 110; /* fill: 5.47:1 vs canvas · white text on it 5.47:1 */
+  --healthy-ink: 17 94 89; /* text: 7.58:1 on canvas, 5.85:1 on surface-3 */
+  --warning: 168 80 11; /* fill: 5.50:1 vs canvas · white text on it 5.50:1 */
+  --warning-ink: 138 64 8; /* text: 7.45:1 on canvas, 5.75:1 on surface-3 */
+  --critical: 192 38 38; /* fill: 5.92:1 vs canvas · white text on it 5.92:1 */
+  --critical-ink: 179 22 22; /* text: 6.90:1 on canvas, 5.33:1 on surface-3 */
+  --stale: 100 116 139; /* dot: 4.76:1 vs canvas */
+  --stale-ink: 85 98 116; /* text: 6.20:1 on canvas, 4.79:1 on surface-3 */
+  --unknown: 124 135 152; /* dot: 3.64:1 vs canvas — graphics floor is 3:1 */
+
+  /*
+    The brand accent, for whatever wants to be orange rather than teal. It
+    gets the same fill/ink split as the status colours and for the same
+    reason: #ff5a00 measures 3.13:1 as text on white, so it can be a button
+    ground carrying near-black text but it cannot be a word on this page.
+  */
+  --ember: 168 60 5; /* fill: white text on it 6.34:1 */
+  --ember-ink: 168 60 5; /* text: 6.34:1 on canvas, 4.89:1 on surface-3 */
+
+  --focus: 17 94 89;
 
   /*
     A system stack rather than next/font: the landing page is the first
@@ -15,30 +82,253 @@
     "Helvetica Neue", Arial, sans-serif;
   --font-mono: ui-monospace, "Cascadia Mono", "Segoe UI Mono", "SF Mono",
     Menlo, Consolas, monospace;
+
+  /* The button branch's easing curve. Decelerating hard at the end is what
+     makes a press feel like it settled rather than stopped. */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.dark {
+  /*
+    DARK, and the default. #0b0f14 is unchanged: it is the ground in every
+    screenshot and demo of this product, and the console is used in dim
+    rooms. The only status value that moved is the critical fill, from
+    #dc2626 to #ef4444 — the old one could not carry near-black button text
+    (4.16:1, under the floor) and read as a dull maroon behind it.
+  */
+  color-scheme: dark;
+
+  --canvas: 11 15 20;
+  --panel: 8 11 15;
+  --surface: 20 26 33;
+  --surface-2: 29 36 45;
+  --surface-3: 41 49 60;
+  --scrim: 0 0 0;
+
+  --line-soft: 26 32 41;
+  --line: 35 43 53;
+  --line-strong: 57 67 79;
+
+  --ink: 230 234 240; /* 15.92:1 on canvas, 10.88:1 on surface-3 */
+  --ink-soft: 183 192 204; /* 10.46:1 on canvas,  7.15:1 on surface-3 */
+  /*
+    The tertiary rung, and the reason it exists. Tailwind's gray-500 measures
+    ~4.0:1 on this ground and was used for most of the console's labels; this
+    is 7.10:1 on canvas and still 4.85:1 on the lightest hover fill.
+  */
+  --muted: 149 158 171;
+  --on-solid: 5 8 11;
+
+  --healthy: 13 148 136; /* fill: 5.13:1 vs canvas · on-solid text 5.36:1 */
+  --healthy-ink: 45 212 191; /* text: 10.32:1 on canvas, 7.06:1 on surface-3 */
+  --warning: 217 119 6; /* fill: 6.03:1 vs canvas · on-solid text 6.30:1 */
+  --warning-ink: 251 191 36; /* text: 11.51:1 on canvas, 7.87:1 on surface-3 */
+  --critical: 239 68 68; /* fill: 5.11:1 vs canvas · on-solid text 5.33:1 */
+  --critical-ink: 248 113 113; /* text:  6.95:1 on canvas, 4.75:1 on surface-3 */
+  --stale: 107 114 128; /* dot: 3.98:1 vs canvas */
+  --stale-ink: 161 169 180; /* text:  8.10:1 on canvas, 5.53:1 on surface-3 */
+  --unknown: 156 163 175; /* dot: 7.57:1 vs canvas */
+
+  --ember: 255 90 0; /* fill: 6.15:1 vs canvas · on-solid text 6.42:1 */
+  --ember-ink: 255 122 51; /* text: 7.40:1 on canvas, 5.06:1 on surface-3 */
+
+  --focus: 45 212 191;
 }
 
 body {
-  background: #0b0f14;
-  color: #e5e7eb;
+  background: rgb(var(--canvas));
+  color: rgb(var(--ink));
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
+}
+
+/* From the button-system branch. An unconstrained <img> in a grid cell is the
+   most common way a responsive layout blows out sideways. */
+img {
+  max-width: 100%;
 }
 
 /*
   One focus treatment for the whole app. The console leans on colour to carry
   status, so keyboard focus has to be unmistakable and never colour-only —
   a solid ring plus an offset that reads against both the page ground and the
-  lighter panel fills.
+  lighter panel fills. The ring colour is a token, so it stays legible when
+  the ground flips from near-black to white.
+
+  Buttons opt out because they use the two-layer ring below, which does the
+  same job better on a pill; without the exclusion they would draw both.
 */
-:where(a, button, input, [tabindex]):focus-visible {
-  outline: 2px solid #2dd4bf;
+:where(a, button, input, select, textarea, [tabindex]):focus-visible:not(.ui-button) {
+  outline: 2px solid rgb(var(--focus));
   outline-offset: 2px;
   border-radius: 2px;
+}
+
+/*
+  ---------------------------------------------------------------------------
+  The button system, ported from the feat/landing-button-system branch.
+
+  The geometry is theirs unchanged — a 3rem pill with a 0.5rem gap and the
+  --ease-out curve — because it is good and because components/ui/Button.tsx
+  already emits exactly these class names. What changed is every colour: the
+  branch hardcoded zinc and #dc2626, which only works on a pale page, and this
+  app has to be correct on a near-black one as well. Each variant now reads
+  from the theme tokens and is therefore two designs, not one.
+
+  Primary is NEUTRAL — ink on canvas — rather than the product teal, and that
+  is deliberate. In a console whose entire job is showing which machine is
+  broken, teal already means "healthy". A teal call-to-action sitting a few
+  pixels from a teal status dot asks the operator to read the same colour two
+  ways. Making the primary button the highest-contrast neutral available frees
+  teal, amber and red to mean only what they mean on the fleet board.
+  ---------------------------------------------------------------------------
+*/
+@layer components {
+  .ui-button {
+    display: inline-flex;
+    height: 3rem;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    border-radius: 9999px;
+    padding: 0 1.25rem;
+    font-size: 0.9375rem;
+    line-height: 1.5;
+    font-weight: 500;
+    white-space: nowrap;
+    text-decoration: none;
+    transition-property: color, background-color, border-color, box-shadow, transform;
+    transition-duration: 200ms;
+    transition-timing-function: var(--ease-out);
+  }
+
+  /*
+    A two-layer box-shadow rather than an outline, taken from the branch. The
+    inner layer is the page ground, so the ring always has a gap around the
+    pill no matter what it is sitting on — including the dark hero slab, where
+    an offset outline would collide with the slab's own edge.
+  */
+  .ui-button:focus-visible {
+    outline: none;
+    box-shadow:
+      0 0 0 2px rgb(var(--canvas)),
+      0 0 0 4px rgb(var(--focus));
+  }
+
+  .ui-button:disabled {
+    pointer-events: none;
+    opacity: 0.5;
+  }
+
+  /* Guarded exactly as the branch had it. The press feedback is a nicety; for
+     anyone who has asked the OS to stop moving things it is not. */
+  @media (prefers-reduced-motion: no-preference) {
+    .ui-button:active {
+      transform: scale(0.97);
+      transition-duration: 160ms;
+    }
+  }
+
+  /** For dense chrome — console toolbars, panel actions — where 3rem is a slab. */
+  .ui-button-sm {
+    height: 2.25rem;
+    padding: 0 0.875rem;
+    font-size: 0.8125rem;
+  }
+
+  /** Form submits that should fill their column. */
+  .ui-button-block {
+    width: 100%;
+  }
+
+  .ui-button-primary {
+    border: 1px solid transparent;
+    background: rgb(var(--ink));
+    color: rgb(var(--canvas));
+  }
+
+  /* Steps toward the muted rung rather than to a second hue, so hover is a
+     change in weight and never reads as a change in meaning. */
+  .ui-button-primary:hover {
+    background: rgb(var(--ink-soft));
+  }
+
+  .ui-button-secondary {
+    border: 1px solid rgb(var(--line-strong));
+    background: transparent;
+    color: rgb(var(--ink));
+  }
+
+  .ui-button-secondary:hover {
+    border-color: rgb(var(--line-strong));
+    background: rgb(var(--surface-2));
+  }
+
+  .ui-button-ghost {
+    border: 1px solid transparent;
+    background: transparent;
+    color: rgb(var(--ink));
+  }
+
+  .ui-button-ghost:hover {
+    background: rgb(var(--surface-2));
+  }
+
+  .ui-button-destructive {
+    border: 1px solid rgb(var(--critical));
+    background: transparent;
+    color: rgb(var(--critical-ink));
+  }
+
+  .ui-button-destructive:hover {
+    background: rgb(var(--critical));
+    color: rgb(var(--on-solid));
+    border-color: rgb(var(--critical));
+  }
+
+  .ui-button-destructive:focus-visible {
+    box-shadow:
+      0 0 0 2px rgb(var(--canvas)),
+      0 0 0 4px rgb(var(--critical));
+  }
+}
+
+/*
+  The hero's single soft wash. It is a class rather than an arbitrary Tailwind
+  value because the colour has to come from --healthy, and a `var()` with a
+  slash inside `bg-[radial-gradient(…)]` is a fight with Tailwind's opacity-
+  modifier parser that this does not need to have. Weaker in light, where a
+  teal tint on white shows up far more readily than on near-black.
+*/
+.hero-wash {
+  background-image: radial-gradient(
+    60% 60% at 50% 0%,
+    rgb(var(--healthy) / 0.1),
+    transparent 70%
+  );
+}
+
+.dark .hero-wash {
+  background-image: radial-gradient(
+    60% 60% at 50% 0%,
+    rgb(var(--healthy) / 0.18),
+    transparent 70%
+  );
 }
 
 /* Anchor navigation must not drop a heading underneath the sticky header. */
 :where(section[id]) {
   scroll-margin-top: 5rem;
+}
+
+/*
+  Themed scrollbars. Without this the console's dark panels get the OS's
+  light scrollbar tracks in browsers that ignore `color-scheme` on a
+  non-root element, which is a bright white gutter down the side of a dark
+  operations screen.
+*/
+* {
+  scrollbar-color: rgb(var(--line-strong)) transparent;
 }
 
 @media (prefers-reduced-motion: reduce) {

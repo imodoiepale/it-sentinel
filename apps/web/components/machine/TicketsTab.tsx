@@ -68,14 +68,14 @@ export function TicketsTab({ activity }: { activity: MachineActivity }) {
               {openAlerts.map((a) => (
                 <li key={a.id} className="flex flex-wrap items-baseline gap-2">
                   <Pill tone={severityTone(a.severity)}>{a.severity}</Pill>
-                  <span className="text-gray-200">{a.title}</span>
+                  <span className="text-ink-soft">{a.title}</span>
                   <span className="text-xs text-muted">alert, raised {formatTimestamp(a.createdAt)}</span>
                 </li>
               ))}
               {openIncidents.map((i) => (
                 <li key={i.id} className="flex flex-wrap items-baseline gap-2">
                   <Pill tone={severityTone(i.severity)}>{i.severity}</Pill>
-                  <span className="text-gray-200">{i.title}</span>
+                  <span className="text-ink-soft">{i.title}</span>
                   {i.ticketRef && <span className="font-mono text-xs text-muted">{i.ticketRef}</span>}
                   <span className="text-xs text-muted">opened {formatTimestamp(i.openedAt)}</span>
                 </li>
@@ -109,7 +109,7 @@ function IncidentTable({ rows, empty }: { rows: MachineActivity["incidents"]; em
       <table className="w-full text-sm">
         <caption className="sr-only">Incidents, newest first</caption>
         <thead>
-          <tr className="border-b border-white/10">
+          <tr className="border-b border-line">
             <th scope="col" className={TH}>
               Opened
             </th>
@@ -132,7 +132,7 @@ function IncidentTable({ rows, empty }: { rows: MachineActivity["incidents"]; em
             <tr key={i.id} className={TR}>
               <td className={`${TD} text-muted whitespace-nowrap`}>{formatTimestamp(i.openedAt)}</td>
               <td className={`${TD} font-mono text-xs text-muted`}>{i.ticketRef ?? "—"}</td>
-              <td className={`${TD} text-gray-200`}>
+              <td className={`${TD} text-ink-soft`}>
                 {i.title}
                 {i.category && <span className="block text-xs text-muted">{i.category}</span>}
               </td>
@@ -146,7 +146,7 @@ function IncidentTable({ rows, empty }: { rows: MachineActivity["incidents"]; em
                 {/* resolutionSuccess is nullable and false is meaningful, so
                     it is only rendered when the column actually holds one. */}
                 {i.resolutionSuccess === false && (
-                  <span className="block text-xs text-warning">
+                  <span className="block text-xs text-warning-ink">
                     <span className="sr-only">Warning: </span>
                     did not hold
                   </span>

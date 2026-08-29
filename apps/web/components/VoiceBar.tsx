@@ -149,11 +149,11 @@ export function VoiceBar({ onOpenBranch }: Props) {
     <div className="flex items-center gap-3">
       <VoiceAgentWidget />
 
-      <span className="h-5 w-px bg-white/10" aria-hidden />
+      <span className="h-5 w-px bg-line" aria-hidden />
 
       {state === "confirming" && candidates.length > 0 && (
-        <div className="text-xs bg-white/5 border border-white/10 rounded px-3 py-1.5 flex items-center gap-2">
-          <span className="text-gray-400">Did you mean</span>
+        <div className="text-xs bg-surface border border-line rounded px-3 py-1.5 flex items-center gap-2">
+          <span className="text-ink-soft">Did you mean</span>
           {candidates.slice(0, 2).map((c) => (
             <button
               key={c.slug}
@@ -162,12 +162,12 @@ export function VoiceBar({ onOpenBranch }: Props) {
                 setState("idle");
                 setCandidates([]);
               }}
-              className="px-2 py-0.5 rounded bg-white/10 hover:bg-white/20"
+              className="px-2 py-0.5 rounded bg-surface-2 hover:bg-surface-3"
             >
               {c.name}
             </button>
           ))}
-          <button onClick={() => { setState("idle"); setCandidates([]); }} className="text-gray-500">
+          <button onClick={() => { setState("idle"); setCandidates([]); }} className="text-muted">
             cancel
           </button>
         </div>
@@ -180,7 +180,7 @@ export function VoiceBar({ onOpenBranch }: Props) {
       )}
 
       {transcript && state !== "confirming" && state !== "error" && (
-        <span className="text-xs text-gray-500 italic">&ldquo;{transcript}&rdquo;</span>
+        <span className="text-xs text-muted italic">&ldquo;{transcript}&rdquo;</span>
       )}
 
       <div className="flex flex-col items-center leading-none">
@@ -212,8 +212,8 @@ export function VoiceBar({ onOpenBranch }: Props) {
             listening
               ? "bg-critical/20 border-critical text-critical-ink ring-2 ring-critical/40"
               : state === "resolving"
-                ? "bg-white/10 border-white/20"
-                : "bg-white/5 border-white/10 hover:bg-white/10"
+                ? "bg-surface-2 border-line-strong"
+                : "bg-surface border-line hover:bg-surface-3"
           }`}
         >
           <span aria-hidden>🎙</span>
@@ -230,7 +230,7 @@ export function VoiceBar({ onOpenBranch }: Props) {
           hover delay — none of which help the person who clicked once, saw
           nothing happen, and concluded the feature was broken.
         */}
-        <span className="mt-1 text-[10px] text-gray-500" aria-hidden>
+        <span className="mt-1 text-[10px] text-muted" aria-hidden>
           hold &amp; say “Lagos”
         </span>
       </div>

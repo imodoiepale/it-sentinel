@@ -49,7 +49,7 @@ const PHASE_DOT: Record<Phase, string> = {
   idle: "bg-unknown",
   connecting: "bg-warning animate-pulse",
   listening: "bg-healthy animate-pulse",
-  speaking: "bg-[#2dd4bf]",
+  speaking: "bg-healthy-ink",
   failed: "bg-critical",
 };
 
@@ -151,8 +151,8 @@ function VoiceAgentPanel() {
         aria-pressed={live}
         className={`flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm transition-colors ${
           live
-            ? "border-[#2dd4bf]/60 bg-[#2dd4bf]/15 text-[#5eead4]"
-            : "border-[#2dd4bf]/40 bg-[#2dd4bf]/10 text-[#5eead4] hover:bg-[#2dd4bf]/20"
+            ? "border-healthy-ink/60 bg-healthy-ink/15 text-healthy-ink"
+            : "border-healthy-ink/40 bg-healthy-ink/10 text-healthy-ink hover:bg-healthy-ink/20"
         }`}
       >
         <span className={`h-2 w-2 shrink-0 rounded-full ${PHASE_DOT[phase]}`} aria-hidden />
@@ -175,7 +175,7 @@ function VoiceAgentPanel() {
         <span
           role="status"
           aria-live="polite"
-          className={`text-xs ${phase === "failed" ? "text-critical" : "text-gray-400"}`}
+          className={`text-xs ${phase === "failed" ? "text-critical-ink" : "text-ink-soft"}`}
         >
           {failure ?? PHASE_LABEL[phase]}
         </span>

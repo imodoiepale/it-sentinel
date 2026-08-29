@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 420" fill="none" role="img" aria-labelledby="hero-title hero-desc">
+  <title id="hero-title">Seven branches, monitored from one place</title>
+  <desc id="hero-desc">An abstract network of seven bright nodes connected to a central hub, six reporting healthy and one showing a fault.</desc>
+
+  <!--
+    Abstract on purpose. A fake dashboard screenshot would imply numbers the
+    product has not measured, and a real screenshot goes stale the moment the
+    UI changes. This says the true thing — seven sites, one hub, faults
+    surface — without asserting anything specific.
+
+    Positions are loosely geographic (left to right: Americas, Africa/Europe,
+    Middle East, APAC) so the shape reads as a fleet rather than decoration.
+    Colours come from the same semantic palette as StatusDot: teal healthy,
+    amber warning, red critical.
+  -->
+  <defs>
+    <radialGradient id="glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#2dd4bf" stop-opacity="0.45" />
+      <stop offset="100%" stop-color="#2dd4bf" stop-opacity="0" />
+    </radialGradient>
+    <linearGradient id="link" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#2dd4bf" stop-opacity="0.05" />
+      <stop offset="50%" stop-color="#2dd4bf" stop-opacity="0.42" />
+      <stop offset="100%" stop-color="#2dd4bf" stop-opacity="0.05" />
+    </linearGradient>
+  </defs>
+
+  <circle cx="480" cy="210" r="200" fill="url(#glow)" />
+
+  <!-- Links, drawn first so nodes sit on top. -->
+  <g stroke="url(#link)" stroke-width="1.4" fill="none">
+    <path d="M480 210 L150 120" /><path d="M480 210 L232 300" />
+    <path d="M480 210 L392 96" /><path d="M480 210 L560 322" />
+    <path d="M480 210 L700 138" /><path d="M480 210 L812 258" />
+    <path d="M480 210 L318 214" />
+  </g>
+
+  <!-- Hub. -->
+  <circle cx="480" cy="210" r="15" fill="#0b0f14" stroke="#2dd4bf" stroke-width="2.4" />
+  <circle cx="480" cy="210" r="5" fill="#2dd4bf" />
+
+  <!-- Healthy branches. -->
+  <g fill="#0b0f14" stroke="#2dd4bf" stroke-width="2">
+    <circle cx="150" cy="120" r="8" /><circle cx="232" cy="300" r="8" />
+    <circle cx="392" cy="96" r="8" /><circle cx="700" cy="138" r="8" />
+    <circle cx="318" cy="214" r="8" />
+  </g>
+  <g fill="#2dd4bf">
+    <circle cx="150" cy="120" r="3" /><circle cx="232" cy="300" r="3" />
+    <circle cx="392" cy="96" r="3" /><circle cx="700" cy="138" r="3" />
+    <circle cx="318" cy="214" r="3" />
+  </g>
+
+  <!-- One warning, one fault: the state the product exists to surface. -->
+  <circle cx="812" cy="258" r="8" fill="#0b0f14" stroke="#f59e0b" stroke-width="2" />
+  <circle cx="812" cy="258" r="3" fill="#f59e0b" />
+
+  <circle cx="560" cy="322" r="13" fill="none" stroke="#f87171" stroke-width="1.2" opacity="0.45" />
+  <circle cx="560" cy="322" r="8" fill="#0b0f14" stroke="#f87171" stroke-width="2.2" />
+  <circle cx="560" cy="322" r="3" fill="#f87171" />
+</svg>

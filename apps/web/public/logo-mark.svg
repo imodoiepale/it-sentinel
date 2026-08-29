@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="none" role="img" aria-labelledby="sentinel-mark-title">
+  <title id="sentinel-mark-title">IT Sentinel</title>
+  <!--
+    A shield with a heartbeat trace through it.
+
+    currentColor throughout, deliberately: the mark is dropped into a dark
+    console and a light landing page, and a hardcoded hex would need a second
+    file and would drift from whichever theme changed first. The one accent
+    (the live node) is the only exception, and it is the semantic "healthy"
+    teal so it stays in step with StatusDot.
+  -->
+  <path
+    d="M24 3.5 6.5 10.2v13.1c0 10.6 7.2 20.5 17.5 23.2 10.3-2.7 17.5-12.6 17.5-23.2V10.2L24 3.5Z"
+    stroke="currentColor" stroke-width="2.4" stroke-linejoin="round" opacity="0.95" />
+  <!-- The trace: flat, one fault spike, back to flat. The product in one gesture. -->
+  <path
+    d="M12.5 25.5h6.2l3.1-7.4 4.1 14.2 3-6.8h6.6"
+    stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" />
+  <circle cx="35.5" cy="25.5" r="2.9" fill="#2dd4bf" />
+</svg>

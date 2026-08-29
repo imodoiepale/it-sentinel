@@ -42,7 +42,7 @@ export function HistoryTab({ activity, checks }: { activity: MachineActivity; ch
               <table className="w-full text-sm">
                 <caption className="sr-only">Commands dispatched to this machine, newest first</caption>
                 <thead>
-                  <tr className="border-b border-white/10">
+                  <tr className="border-b border-line">
                     <th scope="col" className={TH}>
                       When
                     </th>
@@ -64,14 +64,14 @@ export function HistoryTab({ activity, checks }: { activity: MachineActivity; ch
                   {runs.map((r) => (
                     <tr key={r.id} className={TR}>
                       <td className={`${TD} text-muted whitespace-nowrap`}>{formatTimestamp(r.createdAt)}</td>
-                      <td className={`${TD} text-gray-200`}>
+                      <td className={`${TD} text-ink-soft`}>
                         {r.kind}
                         {r.scriptId && <span className="block font-mono text-xs text-muted">{r.scriptId}</span>}
                       </td>
                       <td className={`${TD} text-muted`}>{r.tier}</td>
                       <td className={TD}>
                         <Pill tone={outcomeTone(r.outcome)}>{r.outcome ?? "no result"}</Pill>
-                        {r.refusalReason && <span className="block text-xs text-warning">{r.refusalReason}</span>}
+                        {r.refusalReason && <span className="block text-xs text-warning-ink">{r.refusalReason}</span>}
                         {r.exitCode !== null && r.exitCode !== 0 && (
                           <span className="block text-xs text-critical-ink">exit {r.exitCode}</span>
                         )}

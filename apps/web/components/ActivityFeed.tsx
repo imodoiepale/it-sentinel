@@ -183,16 +183,16 @@ export function ActivityFeed({ assets }: Props) {
   }, []);
 
   return (
-    <aside className="w-80 shrink-0 border-l border-white/10 bg-[#080b0f] flex flex-col">
-      <div className="p-3.5 border-b border-white/10 flex items-center justify-between">
-        <div className="text-[11px] font-medium uppercase tracking-wider text-gray-500">Live activity</div>
+    <aside className="w-80 shrink-0 border-l border-line bg-panel flex flex-col">
+      <div className="p-3.5 border-b border-line flex items-center justify-between">
+        <div className="text-[11px] font-medium uppercase tracking-wider text-muted">Live activity</div>
         <div className="flex items-center gap-1.5" role="status">
           <span
             className={`h-2 w-2 rounded-full ${connected ? "bg-healthy animate-breathe" : "bg-stale"}`}
             aria-hidden
           />
           {/* Never colour alone, per StatusDot: the word carries the state too. */}
-          <span className={`text-[11px] ${connected ? "text-healthy-ink" : "text-gray-500"}`}>
+          <span className={`text-[11px] ${connected ? "text-healthy-ink" : "text-muted"}`}>
             {connected ? "Live" : "Connecting…"}
           </span>
           <span className="sr-only">
@@ -202,22 +202,31 @@ export function ActivityFeed({ assets }: Props) {
       </div>
 
       <ol className="flex-1 overflow-y-auto" role="log" aria-live="polite" aria-relevant="additions">
+        {/*
+          An empty feed is the normal resting state of a healthy fleet, so it
+          is written as a description of what the panel is doing rather than
+          as an absence. "Nothing here" and "nothing is being watched" must
+          not look the same.
+        */}
         {events.length === 0 && (
-          <li className="p-4 text-xs text-muted leading-relaxed">
-            Watching the fleet. Alerts, status changes, sessions and spoken commands appear here the moment they
-            happen.
+          <li className="px-4 py-6 text-xs leading-relaxed text-muted">
+            <span className="block font-medium text-ink-soft">Watching the fleet.</span>
+            <span className="mt-1.5 block">
+              Alerts, status changes, sessions and spoken commands land here the moment they
+              happen.
+            </span>
           </li>
         )}
         {events.map((e) => (
-          <li key={e.key} className="px-3 py-2 border-b border-white/5 flex items-start gap-2">
+          <li key={e.key} className="px-3.5 py-2.5 border-b border-line-soft flex items-start gap-2.5">
             <span className="mt-1">
               <StatusDot status={e.status} label={`${e.label}: ${e.detail}`} />
             </span>
             <span className="flex flex-col min-w-0">
-              <span className="text-xs text-gray-300">{e.label}</span>
-              <span className="text-[11px] text-gray-500 break-words">{e.detail}</span>
+              <span className="text-xs font-medium text-ink">{e.label}</span>
+              <span className="text-[11px] text-muted break-words">{e.detail}</span>
             </span>
-            <time className="ml-auto text-[10px] text-gray-600 tabular-nums shrink-0" dateTime={new Date(e.at).toISOString()}>
+            <time className="ml-auto text-[10px] text-muted tabular-nums shrink-0" dateTime={new Date(e.at).toISOString()}>
               {clockTime(e.at)}
             </time>
           </li>
@@ -225,7 +234,7 @@ export function ActivityFeed({ assets }: Props) {
       </ol>
 
       {events.length > 0 && (
-        <div className="p-2 border-t border-white/10 text-[10px] text-gray-600">
+        <div className="p-2 border-t border-line text-[10px] text-muted">
           Newest first · the last {MAX_EVENTS} events are kept
         </div>
       )}

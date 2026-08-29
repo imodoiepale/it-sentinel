@@ -55,7 +55,7 @@ export function PrintersTab({ payload, checks }: { payload: TelemetrySnapshot; c
                 <table className="w-full text-sm">
                   <caption className="sr-only">Printers installed on this machine</caption>
                   <thead>
-                    <tr className="border-b border-white/10">
+                    <tr className="border-b border-line">
                       <th scope="col" className={TH}>
                         Printer
                       </th>
@@ -81,7 +81,7 @@ export function PrintersTab({ payload, checks }: { payload: TelemetrySnapshot; c
                       })
                       .map((p) => (
                         <tr key={p.name} className={TR}>
-                          <th scope="row" className={`${TD} font-normal text-left text-gray-200`}>
+                          <th scope="row" className={`${TD} font-normal text-left text-ink-soft`}>
                             {p.name}
                             {p.isDefault && <span className="ml-2 text-xs text-muted">default</span>}
                           </th>
@@ -90,11 +90,11 @@ export function PrintersTab({ payload, checks }: { payload: TelemetrySnapshot; c
                               {p.online ? "online" : "offline"}
                             </Pill>
                             {p.faultClass !== "none" && (
-                              <span className="ml-1.5 text-xs text-warning">{p.faultClass.replace(/_/g, " ")}</span>
+                              <span className="ml-1.5 text-xs text-warning-ink">{p.faultClass.replace(/_/g, " ")}</span>
                             )}
                             {p.errorState && <span className="block text-xs text-critical-ink">{p.errorState}</span>}
                           </td>
-                          <td className={`${TD} text-right tabular-nums ${p.queueDepth > 0 ? "text-warning" : "text-muted"}`}>
+                          <td className={`${TD} text-right tabular-nums ${p.queueDepth > 0 ? "text-warning-ink" : "text-muted"}`}>
                             {p.queueDepth > 0 && <span className="sr-only">Warning: </span>}
                             {p.queueDepth}
                           </td>

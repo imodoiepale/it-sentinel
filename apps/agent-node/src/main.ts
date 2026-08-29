@@ -26,6 +26,9 @@ const COLLECT_SCRIPT = join(__dirname, "collect.ps1");
 const SCRIPTS_DIR = process.env.SENTINEL_SCRIPTS_DIR ?? join(__dirname, "..", "..", "..", "packages", "scripts", "library");
 
 const CONTROL_PLANE_URL = process.env.CONTROL_PLANE_URL ?? "http://localhost:8787";
+// 60s is only a fallback for a hand-rolled .env. install-sentinel-agent.ps1
+// writes HEARTBEAT_INTERVAL_MS=15000, so every enrolled machine reports every
+// 15 seconds - the figure the enrollment page and the runbook both quote.
 const HEARTBEAT_INTERVAL_MS = Number(process.env.HEARTBEAT_INTERVAL_MS ?? 60_000);
 const COMMAND_POLL_INTERVAL_MS = Number(process.env.COMMAND_POLL_INTERVAL_MS ?? 5_000);
 const COLLECT_TIMEOUT_MS = Number(process.env.COLLECT_TIMEOUT_MS ?? 45_000);

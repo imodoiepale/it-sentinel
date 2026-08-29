@@ -98,7 +98,7 @@ export function AlertAnnouncer({ enabled = true }: { enabled?: boolean }) {
       <button
         type="button"
         onClick={() => setMuted((m) => !m)}
-        className="px-2 py-1 rounded border border-white/10 text-gray-400 hover:text-gray-200"
+        className="px-2 py-1 rounded border border-line text-ink-soft hover:text-ink"
         aria-pressed={muted}
         title={muted ? "Voice alerts muted" : "Voice alerts on"}
       >
@@ -108,13 +108,13 @@ export function AlertAnnouncer({ enabled = true }: { enabled?: boolean }) {
       {!audioUnlocked && !muted && (
         // Without this the first alert is silently swallowed by autoplay
         // policy and looks like a broken feature.
-        <span className="text-gray-500" role="status">
+        <span className="text-muted" role="status">
           click anywhere to enable audio
         </span>
       )}
 
       {spoken[0] && (
-        <span className="text-critical truncate max-w-[22rem]" role="status" aria-live="polite">
+        <span className="text-critical-ink truncate max-w-[22rem]" role="status" aria-live="polite">
           {spoken[0]}
         </span>
       )}

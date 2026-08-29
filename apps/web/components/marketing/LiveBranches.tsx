@@ -5,8 +5,8 @@ import { LivePip } from "./primitives";
 import { fetchSites, type PublicSite } from "./sites";
 
 const CRITICALITY_STYLE: Record<string, string> = {
-  critical: "border-warning/40 text-warning",
-  standard: "border-white/15 text-gray-400",
+  critical: "border-warning/40 text-warning-ink",
+  standard: "border-line-strong text-ink-soft",
 };
 
 /**
@@ -36,8 +36,8 @@ export function LiveBranches({ initial }: { initial: PublicSite[] | null }) {
 
   if (!sites) {
     return (
-      <div className="mt-10 rounded-xl border border-white/[0.09] bg-white/[0.02] p-6">
-        <p className="text-sm text-gray-400">
+      <div className="mt-10 rounded-xl border border-line bg-surface p-6">
+        <p className="text-sm text-ink-soft">
           {retrying
             ? "Reaching the control plane for the live branch roster…"
             : "The live branch roster isn’t reachable from here right now. The console has the full picture."}
@@ -62,9 +62,9 @@ export function LiveBranches({ initial }: { initial: PublicSite[] | null }) {
       */}
       <ul className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {sites.map((site) => (
-          <li key={site.id} className="rounded-xl border border-white/[0.09] bg-white/[0.02] p-5">
+          <li key={site.id} className="rounded-xl border border-line bg-surface p-5">
             <div className="flex items-start justify-between gap-3">
-              <p className="text-sm font-semibold text-white">{site.name}</p>
+              <p className="text-sm font-semibold text-ink">{site.name}</p>
               <span
                 className={`shrink-0 rounded border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide ${
                   CRITICALITY_STYLE[site.criticality] ?? CRITICALITY_STYLE.standard

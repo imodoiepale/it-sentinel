@@ -15,16 +15,18 @@ import type { ReactNode } from "react";
 export type Tone = "ok" | "warn" | "bad" | "muted" | "plain";
 
 /*
- * The -ink steps, not the fills. tailwind.config.ts spells out why: the fill
- * teal and red are ~3:1 and ~4:1 on #0b0f14, which is fine behind black
- * button text and unreadable as a foreground colour.
+ * The -ink steps, not the fills. tailwind.config.ts spells out why: a fill is
+ * tuned to be seen as a dot against the page, an ink is tuned to be read as a
+ * word, and the two floors are different (3:1 against 4.5:1). Using a fill as
+ * a text colour is how the previous version of this file put ~4:1 red on the
+ * console ground.
  */
 const TONE_TEXT: Record<Tone, string> = {
   ok: "text-healthy-ink",
-  warn: "text-warning",
+  warn: "text-warning-ink",
   bad: "text-critical-ink",
   muted: "text-muted",
-  plain: "text-gray-200",
+  plain: "text-ink-soft",
 };
 
 const TONE_FILL: Record<Tone, string> = {
@@ -32,15 +34,15 @@ const TONE_FILL: Record<Tone, string> = {
   warn: "bg-warning",
   bad: "bg-critical",
   muted: "bg-unknown",
-  plain: "bg-white/30",
+  plain: "bg-ink-soft",
 };
 
 const TONE_BORDER: Record<Tone, string> = {
   ok: "border-healthy/50",
   warn: "border-warning/60",
   bad: "border-critical/60",
-  muted: "border-white/15",
-  plain: "border-white/15",
+  muted: "border-line-strong",
+  plain: "border-line-strong",
 };
 
 /** Spoken prefix for anything whose meaning would otherwise be the colour. */
@@ -74,9 +76,9 @@ export function Section({
   children: ReactNode;
 }) {
   return (
-    <section className="rounded-lg border border-white/10 bg-white/[0.03] shadow-[inset_0_1px_0_0_rgba(255,255,255,0.04)]">
-      <header className="flex items-baseline justify-between gap-3 px-3.5 py-2.5 border-b border-white/10">
-        <h3 className="text-[11px] font-medium uppercase tracking-wider text-gray-500">{title}</h3>
+    <section className="rounded-lg border border-line bg-surface">
+      <header className="flex items-baseline justify-between gap-3 px-3.5 py-2.5 border-b border-line">
+        <h3 className="text-[11px] font-medium uppercase tracking-wider text-muted">{title}</h3>
         {aside}
       </header>
       {hint && <p className="px-3.5 pt-2.5 text-xs text-muted">{hint}</p>}
@@ -102,7 +104,7 @@ export function Facts({ items }: { items: Fact[] }) {
   return (
     <dl className="text-sm">
       {items.map((f) => (
-        <div key={f.label} className="flex flex-wrap items-baseline gap-x-3 py-1 border-b border-white/5 last:border-0">
+        <div key={f.label} className="flex flex-wrap items-baseline gap-x-3 py-1 border-b border-line-soft last:border-0">
           <dt className="w-44 shrink-0 text-muted">{f.label}</dt>
           <dd className={`flex-1 min-w-0 break-words ${TONE_TEXT[f.tone ?? "plain"]}`}>
             {f.tone && f.tone !== "plain" && <span className="sr-only">{TONE_WORD[f.tone]}</span>}
@@ -169,7 +171,7 @@ export function Meter({
       </div>
       {/* Decoration only: the caption above already carries the number, so a
           screen reader reading the bar as well would just repeat it. */}
-      <div className="mt-1 h-1.5 rounded bg-white/10 overflow-hidden" aria-hidden>
+      <div className="mt-1 h-1.5 rounded bg-surface-2 overflow-hidden" aria-hidden>
         <div className={`h-full ${TONE_FILL[tone]}`} style={{ width: `${clamped}%` }} />
       </div>
     </div>
@@ -185,8 +187,8 @@ export function Meter({
  */
 export function NotCollected({ heading, children }: { heading: string; children: ReactNode }) {
   return (
-    <div className="rounded-lg border border-dashed border-white/15 bg-white/[0.015] p-4">
-      <p className="text-sm font-medium text-gray-200">{heading}</p>
+    <div className="rounded-lg border border-dashed border-line-strong bg-surface p-4">
+      <p className="text-sm font-medium text-ink-soft">{heading}</p>
       <div className="mt-2 space-y-2 text-sm text-muted max-w-2xl">{children}</div>
     </div>
   );
@@ -207,6 +209,6 @@ export function Scroller({ children, max = "max-h-72" }: { children: ReactNode; 
   return <div className={`${max} overflow-auto -mx-3.5 px-3.5`}>{children}</div>;
 }
 
-export const TH = "p-2 text-left font-normal text-gray-500 text-xs uppercase tracking-wide";
+export const TH = "p-2 text-left font-normal text-muted text-xs uppercase tracking-wide";
 export const TD = "p-2 align-top";
-export const TR = "border-b border-white/5 last:border-0";
+export const TR = "border-b border-line-soft last:border-0";

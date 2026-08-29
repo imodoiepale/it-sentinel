@@ -113,7 +113,7 @@ export function ProcessesTab({ payload }: { payload: TelemetrySnapshot }) {
               <table className="w-full text-sm">
                 <caption className="sr-only">Processes by memory use on this machine</caption>
                 <thead>
-                  <tr className="border-b border-white/10">
+                  <tr className="border-b border-line">
                     <th scope="col" className={TH}>
                       Process
                     </th>

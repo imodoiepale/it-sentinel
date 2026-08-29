@@ -53,41 +53,82 @@ export default async function LandingPage() {
   );
 }
 
+/**
+ * The hero, taken from the button-system branch: a single rounded slab that
+ * holds the headline, the CTAs and the fleet drawing, rather than type sitting
+ * loose on the page ground.
+ *
+ * The `dark` class is what makes their light-first design work in both themes.
+ * Their slab is obsidian on a pale page; here the slab simply declares itself
+ * a dark region, so every token inside resolves to its dark value. In the
+ * light theme that is exactly their design — a near-black slab on white. In
+ * the dark theme it is a panel one step off the page ground, held apart by a
+ * hairline rather than by a colour change it cannot make. One block of markup,
+ * two correct designs, and no `dark:` variant anywhere inside it.
+ *
+ * It also solves hero-network.svg, which is drawn for a near-black ground and
+ * carries the dark status palette. Inside a region that is always dark, the
+ * <img> needs no second file and cannot drift.
+ */
 function Hero() {
   return (
-    <div className="relative overflow-hidden">
-      {/*
-        One soft radial wash, not a gradient background. It exists to lift the
-        headline off a flat #0b0f14 field and stops well above the fold so the
-        rest of the page stays the same ground colour as the console.
-      */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-x-0 -top-40 h-[32rem] bg-[radial-gradient(60%_60%_at_50%_0%,rgba(13,148,136,0.16),transparent_70%)]"
-      />
-      <div className="relative mx-auto w-full max-w-6xl px-6 pb-20 pt-20 sm:pt-28 lg:px-8">
-        <LivePip label="Seven branches, five continents, monitored live" />
-        <h1 className="mt-6 max-w-3xl text-pretty text-4xl font-semibold tracking-tight text-white sm:text-5xl lg:text-6xl">
-          Ask what&rsquo;s broken. Fix it without leaving the room.
-        </h1>
-        <p className="mt-6 max-w-2xl text-pretty text-lg leading-8 text-gray-400">
-          IT Sentinel watches every Windows machine across your branches and answers out loud. Say{" "}
-          <Spoken>What&rsquo;s wrong in Lagos?</Spoken> and it tells you. Say{" "}
-          <Spoken>Restart the print spooler there</Spoken> and it does &mdash; through the same
-          policy check, the same tier ceiling and the same audit trail as every click.
-        </p>
-        <div className="mt-10 flex flex-wrap items-center gap-3">
-          <PrimaryLink href="/console">Open the console</PrimaryLink>
-          <SecondaryLink href="/enroll">Enroll a machine</SecondaryLink>
+    <div className="mx-auto w-full max-w-6xl px-6 pb-16 pt-8 lg:px-8">
+      {/* bg-panel, not bg-canvas: in the dark theme the slab would otherwise be
+          the same colour as the page behind it and only the hairline would say
+          it was an object. Panel is a step deeper in both themes. */}
+      <div className="dark relative overflow-hidden rounded-[2rem] border border-line bg-panel px-6 py-16 shadow-xl shadow-scrim/20 sm:px-10 sm:py-20 lg:px-14">
+        {/*
+          One soft radial wash, not a gradient background. Both stops come from
+          the healthy token, so it re-tints with the surrounding theme — which
+          inside this slab is always the dark one. See .hero-wash.
+        */}
+        <div aria-hidden className="hero-wash pointer-events-none absolute inset-x-0 -top-32 h-[28rem]" />
+        <div className="relative grid grid-cols-1 items-center gap-12 lg:grid-cols-12 lg:gap-10">
+          <div className="lg:col-span-7">
+            <LivePip label="Seven branches, five continents, monitored live" />
+            <h1 className="mt-6 text-pretty text-4xl font-semibold leading-[1.08] tracking-tight text-ink sm:text-5xl lg:text-[3.5rem]">
+              Ask what&rsquo;s broken. Fix it without leaving the room.
+            </h1>
+            <p className="mt-6 max-w-xl text-pretty text-lg leading-8 text-ink-soft">
+              IT Sentinel watches every Windows machine across your branches and answers out loud. Say{" "}
+              <Spoken>What&rsquo;s wrong in Lagos?</Spoken> and it tells you. Say{" "}
+              <Spoken>Restart the print spooler there</Spoken> and it does &mdash; through the same
+              policy check, the same tier ceiling and the same audit trail as every click.
+            </p>
+            <div className="mt-10 flex flex-wrap items-center gap-3">
+              <PrimaryLink href="/console">Open the console</PrimaryLink>
+              <SecondaryLink href="/enroll">Enroll a machine</SecondaryLink>
+            </div>
+          </div>
+          <FleetDiagram />
         </div>
       </div>
     </div>
   );
 }
 
+/**
+ * The fleet, drawn rather than screenshotted: seven sites around one hub,
+ * five healthy, one warning, one fault. A fake dashboard would imply numbers
+ * nobody measured and a real one goes stale the day the UI changes.
+ */
+function FleetDiagram() {
+  return (
+    <figure className="hidden lg:col-span-5 lg:block">
+      {/* eslint-disable-next-line @next/next/no-img-element -- a static, already-optimised SVG; the image pipeline has nothing to add and would cost a request. */}
+      <img src="/hero-network.svg" alt="" width={960} height={420} className="w-full" />
+      <figcaption className="mt-1 text-center text-[11px] leading-5 text-muted">
+        The two coloured nodes are the point: <span className="text-warning-ink">a warning</span>{" "}
+        and <span className="text-critical-ink">a fault</span> surface without anyone looking for
+        them.
+      </figcaption>
+    </figure>
+  );
+}
+
 /* Spoken commands are quoted, not styled as code -- they are things a person says. */
 function Spoken({ children }: { children: React.ReactNode }) {
-  return <q className="text-gray-200">{children}</q>;
+  return <q className="text-ink-soft">{children}</q>;
 }
 
 function FleetSection({ sites }: { sites: Awaited<ReturnType<typeof fetchSites>> }) {
@@ -133,9 +174,9 @@ function CapabilitiesSection() {
       <div className="mt-12 grid grid-cols-1 gap-6 md:grid-cols-3">
         {CAPABILITIES.map((c) => (
           <Card key={c.title} className="flex flex-col">
-            <h3 className="text-base font-semibold text-white">{c.title}</h3>
-            <p className="mt-3 flex-1 text-sm leading-6 text-gray-400">{c.body}</p>
-            <p className="mt-5 border-t border-white/[0.07] pt-4 text-xs leading-5 text-muted">
+            <h3 className="text-base font-semibold text-ink">{c.title}</h3>
+            <p className="mt-3 flex-1 text-sm leading-6 text-ink-soft">{c.body}</p>
+            <p className="mt-5 border-t border-line-soft pt-4 text-xs leading-5 text-muted">
               {c.detail}
             </p>
           </Card>
@@ -185,12 +226,12 @@ function GovernanceSection() {
 
       <div className="mt-12 grid grid-cols-1 gap-10 lg:grid-cols-5 lg:gap-12">
         <div className="lg:col-span-2">
-          <h3 className="text-sm font-medium text-white">Seven action tiers</h3>
+          <h3 className="text-sm font-medium text-ink">Seven action tiers</h3>
           <p className="mt-2 text-sm leading-6 text-muted">
             Each role has a fixed ceiling. Reaching a tier is a property of the operator, never of
             the request.
           </p>
-          <ul className="mt-6 divide-y divide-white/[0.07] rounded-xl border border-white/[0.09]">
+          <ul className="mt-6 divide-y divide-line-soft rounded-xl border border-line">
             {TIERS.map((t) => (
               /*
                 A three-column grid, not a flex row: the longer gates wrap,
@@ -209,7 +250,7 @@ function GovernanceSection() {
                 >
                   {t.tier}
                 </span>
-                <span className="text-sm font-medium text-gray-200">{t.name}</span>
+                <span className="text-sm font-medium text-ink-soft">{t.name}</span>
                 <span className="text-xs leading-5 text-muted">{t.gate}</span>
               </li>
             ))}
@@ -220,17 +261,17 @@ function GovernanceSection() {
           <dl className="grid grid-cols-1 gap-6 sm:grid-cols-2">
             {GUARANTEES.map((g) => (
               <div key={g.title}>
-                <dt className="text-base font-semibold text-white">{g.title}</dt>
-                <dd className="mt-2.5 text-sm leading-6 text-gray-400">{g.body}</dd>
+                <dt className="text-base font-semibold text-ink">{g.title}</dt>
+                <dd className="mt-2.5 text-sm leading-6 text-ink-soft">{g.body}</dd>
               </div>
             ))}
           </dl>
 
           <div className="mt-8 rounded-xl border border-critical/25 bg-critical/[0.06] p-6">
-            <h3 className="text-sm font-semibold text-white">
+            <h3 className="text-sm font-semibold text-ink">
               T6 is checked first, before tier logic
             </h3>
-            <p className="mt-2.5 text-sm leading-6 text-gray-400">
+            <p className="mt-2.5 text-sm leading-6 text-ink-soft">
               Disabling endpoint protection. Editing the audit log or a session recording. Reading a
               vault secret. Exposing a machine to the public internet. Granting itself privileges.
               Destroying user data or backups. These are not permissions anyone can be granted, and
@@ -260,14 +301,14 @@ function MemorySection() {
           </p>
         </div>
 
-        <figure className="rounded-xl border border-white/[0.09] bg-white/[0.02] p-7">
+        <figure className="rounded-xl border border-line bg-surface p-7">
           <Eyebrow>What it says</Eyebrow>
-          <blockquote className="mt-4 text-pretty text-lg leading-8 text-gray-200">
+          <blockquote className="mt-4 text-pretty text-lg leading-8 text-ink-soft">
             &ldquo;This isn&rsquo;t new: the printer check has been resolved 11 times across 7
             branches. The previous fix was restart-spooler, which succeeded 78% of the time. Ask me
             for the history if you want the detail.&rdquo;
           </blockquote>
-          <figcaption className="mt-5 border-t border-white/[0.07] pt-4 text-xs leading-5 text-muted">
+          <figcaption className="mt-5 border-t border-line-soft pt-4 text-xs leading-5 text-muted">
             Illustrative phrasing. The count, the branch spread and the success rate are all read
             from the incident record at the moment you ask.
           </figcaption>
@@ -322,12 +363,12 @@ function LoopSection() {
       />
       <ol className="mt-12 grid grid-cols-1 gap-x-8 gap-y-8 sm:grid-cols-2 lg:grid-cols-4">
         {LOOP.map((s, i) => (
-          <li key={s.step} className="border-t border-white/[0.12] pt-4">
+          <li key={s.step} className="border-t border-line pt-4">
             <span className="font-mono text-xs text-muted">
               {String(i + 1).padStart(2, "0")}
             </span>
-            <h3 className="mt-2 text-sm font-semibold text-white">{s.step}</h3>
-            <p className="mt-2 text-sm leading-6 text-gray-400">{s.body}</p>
+            <h3 className="mt-2 text-sm font-semibold text-ink">{s.step}</h3>
+            <p className="mt-2 text-sm leading-6 text-ink-soft">{s.body}</p>
           </li>
         ))}
       </ol>
@@ -337,12 +378,12 @@ function LoopSection() {
 
 function ClosingSection() {
   return (
-    <Section className="bg-white/[0.015]">
+    <Section className="bg-surface">
       <div className="mx-auto max-w-2xl text-center">
-        <h2 className="text-pretty text-3xl font-semibold tracking-tight text-white sm:text-4xl">
+        <h2 className="text-pretty text-3xl font-semibold tracking-tight text-ink sm:text-4xl">
           See it on the live fleet.
         </h2>
-        <p className="mt-4 text-pretty text-base leading-7 text-gray-400">
+        <p className="mt-4 text-pretty text-base leading-7 text-ink-soft">
           The console is the same screen a technician uses: branch sidebar, fleet table, voice bar,
           and a remote session one click from any row.
         </p>
@@ -352,7 +393,7 @@ function ClosingSection() {
         </div>
         <p className="mt-6 text-xs text-muted">
           Machine data needs a signed-in operator.{" "}
-          <Link href="/login" className="text-gray-400 underline underline-offset-4 hover:text-white">
+          <Link href="/login" className="text-ink-soft underline underline-offset-4 hover:text-ink">
             Sign in
           </Link>
           .

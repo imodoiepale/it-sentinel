@@ -44,7 +44,7 @@ export function LogsTab({ payload }: { payload: TelemetrySnapshot }) {
                 <table className="w-full text-sm">
                   <caption className="sr-only">Recent critical and error events from the Windows event log</caption>
                   <thead>
-                    <tr className="border-b border-white/10">
+                    <tr className="border-b border-line">
                       <th scope="col" className={TH}>
                         When
                       </th>
@@ -71,13 +71,13 @@ export function LogsTab({ payload }: { payload: TelemetrySnapshot }) {
                             {e.level}
                           </Pill>
                         </td>
-                        <td className={`${TD} text-gray-300`}>
+                        <td className={`${TD} text-ink-soft`}>
                           {e.source}
                           {e.eventId !== undefined && <span className="block text-xs text-muted">ID {e.eventId}</span>}
                         </td>
-                        <td className={`${TD} text-gray-300`}>
+                        <td className={`${TD} text-ink-soft`}>
                           {e.message}
-                          {e.count > 1 && <span className="ml-2 text-xs text-warning">×{e.count}</span>}
+                          {e.count > 1 && <span className="ml-2 text-xs text-warning-ink">×{e.count}</span>}
                         </td>
                       </tr>
                     ))}
