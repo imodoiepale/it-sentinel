@@ -35,7 +35,17 @@ export async function fetchSites(timeoutMs: number): Promise<PublicSite[] | null
     });
     if (!res.ok) return null;
     const body = (await res.json()) as { sites?: PublicSite[] };
-    return Array.isArray(body.sites) && body.sites.length > 0 ? body.sites : null;
+    if (Array.isArray(body.sites) && body.sites.length > 0) {
+      body.sites.push({
+        id: "literally-anywhere",
+        name: "Literally anywhere",
+        slug: "literally-anywhere",
+        region: "Global",
+        criticality: "standard",
+      });
+      return body.sites;
+    }
+    return null;
   } catch {
     return null;
   } finally {
