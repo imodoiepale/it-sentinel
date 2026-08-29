@@ -17,6 +17,7 @@ deny-list that is checked before anything else and cannot be argued with.
 [![Postgres](https://img.shields.io/badge/Supabase%20Postgres-RLS%20on%20every%20table-3ecf8e)](./packages/db/migrations)
 [![Render](https://img.shields.io/badge/deployed-Render-46e3b7)](./render.yaml)
 [![voice](https://img.shields.io/badge/voice-ElevenLabs%20Conversational%20AI-000000)](./docs/16-elevenlabs-agent-config.md)
+[![Built with Cursor](https://img.shields.io/badge/built%20with-Cursor-000000?logo=cursor&logoColor=white)](https://cursor.com)
 
 **[Console](https://it-sentinel-web.onrender.com)** ·
 **[API](https://it-sentinel-control-plane.onrender.com/healthz)** ·
@@ -400,7 +401,7 @@ The wire contract is one readable file:
 
 <div align="center">
 
-Built for **Cursor Kenya Build Night**.
+Built with [Cursor](https://cursor.com) for **Cursor Kenya Build Night**.
 Voice by [ElevenLabs Conversational AI](https://elevenlabs.io) ·
 deployed on [Render](https://render.com) ·
 [Supabase](https://supabase.com) Postgres.
