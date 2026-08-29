@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { readFileSync } from "node:fs";
 import { networkInterfaces } from "node:os";
+import { createSocket } from "node:dgram";
 import { CommandResult, HeartbeatPayload } from "@it-sentinel/contracts";
 import { executeCommand, runPowerShellReal, type ExecutorDeps, type ScriptManifest } from "./exec/executor.js";
 
@@ -46,37 +47,119 @@ if (!BRANCH_SLUG || !BRANCH_NAME) {
 let myAssetId: string | null = null;
 
 /**
- * The machine's LAN address. The relay dials this to reach TightVNC, so
- * "0.0.0.0" (what this used to send) meant remote sessions could never
- * connect. Picks the first non-internal IPv4 — on a laptop with both Wi-Fi
- * and a virtual adapter (Docker/WSL/VirtualBox) that can pick wrong, so
- * SENTINEL_HOST_IP overrides it.
+ * Address ranges that belong to virtual adapters rather than the network the
+ * relay lives on. 192.168.56.0/24 is VirtualBox's host-only default and is
+ * the one that actually bit us: it sorts before a real 10.x address, is not
+ * "internal" as far as Node is concerned, and its adapter is often just
+ * named "Ethernet 2" — so neither ordering nor the name filter caught it,
+ * and the agent published an address the relay could never reach.
  */
-function primaryIpv4(): string {
-  const override = process.env.SENTINEL_HOST_IP;
-  if (override) return override;
+const VIRTUAL_RANGES = [
+  /^192\.168\.56\./, // VirtualBox host-only
+  /^192\.168\.99\./, // docker-machine / minikube
+  /^172\.1[7-9]\./, // Docker bridge networks
+  /^172\.2[0-9]\./,
+  /^172\.3[0-1]\./,
+  /^169\.254\./, // APIPA: no DHCP answered, routes nowhere
+  /^100\.64\./, // CGNAT / some VPN clients
+];
 
+function nameLooksVirtual(name: string): boolean {
+  return /vEthernet|Loopback|VirtualBox|VMware|Hyper-V|Docker|WSL|TAP|Tailscale|ZeroTier/i.test(name);
+}
+
+/**
+ * The address the OS would actually source from when talking to the control
+ * plane.
+ *
+ * Asking the routing table beats ranking `networkInterfaces()` by hand,
+ * because it answers the question we actually care about — "which of this
+ * machine's addresses is on the network that carries real traffic" — instead
+ * of guessing from names and prefixes we have to keep extending. A connected
+ * UDP socket sends nothing; it only makes the kernel pick a route, so this
+ * costs nothing and needs no reachable peer.
+ */
+async function routedIpv4(target: string): Promise<string | null> {
+  return new Promise((resolve) => {
+    const sock = createSocket("udp4");
+    const finish = (v: string | null) => {
+      try {
+        sock.close();
+      } catch {
+        /* already closed */
+      }
+      resolve(v);
+    };
+    const timer = setTimeout(() => finish(null), 1500);
+    sock.once("error", () => {
+      clearTimeout(timer);
+      finish(null);
+    });
+    try {
+      sock.connect(53, target, () => {
+        clearTimeout(timer);
+        const addr = sock.address().address;
+        finish(addr && addr !== "0.0.0.0" ? addr : null);
+      });
+    } catch {
+      clearTimeout(timer);
+      finish(null);
+    }
+  });
+}
+
+/** Enumeration fallback for when the routing probe cannot answer. */
+function enumeratedIpv4(): string[] {
   const candidates: string[] = [];
   for (const [name, addrs] of Object.entries(networkInterfaces())) {
     for (const addr of addrs ?? []) {
       if (addr.family !== "IPv4" || addr.internal) continue;
-      // Deprioritise well-known virtual adapters — they are routable from
-      // this host but not from the relay.
-      if (/^(vEthernet|Loopback|VirtualBox|VMware|Docker|WSL)/i.test(name)) continue;
+      if (nameLooksVirtual(name)) continue;
+      if (VIRTUAL_RANGES.some((r) => r.test(addr.address))) continue;
       candidates.push(addr.address);
     }
   }
-  if (candidates.length === 0) {
-    console.warn("[agent-node] no non-internal IPv4 found — remote sessions to this machine will fail. Set SENTINEL_HOST_IP.");
-    return "0.0.0.0";
-  }
-  if (candidates.length > 1) {
-    console.warn(`[agent-node] multiple IPv4 addresses (${candidates.join(", ")}); using ${candidates[0]}. Set SENTINEL_HOST_IP to override.`);
-  }
-  return candidates[0]!;
+  return candidates;
 }
 
-const HOST_IP = primaryIpv4();
+async function resolveHostIp(): Promise<string> {
+  const override = process.env.SENTINEL_HOST_IP;
+  if (override) return override;
+
+  // 8.8.8.8 is a routing hint, not a dependency — nothing is sent to it, and
+  // the kernel answers even with the network unplugged from the internet.
+  const routed = (await routedIpv4("8.8.8.8")) ?? (await routedIpv4("1.1.1.1"));
+  const enumerated = enumeratedIpv4();
+
+  if (routed && !VIRTUAL_RANGES.some((r) => r.test(routed))) return routed;
+
+  if (enumerated.length > 0) {
+    if (enumerated.length > 1) {
+      console.warn(
+        `[agent-node] several plausible addresses (${enumerated.join(", ")}); using ${enumerated[0]}. Set SENTINEL_HOST_IP to override.`,
+      );
+    }
+    return enumerated[0]!;
+  }
+
+  // Routed but virtual, and nothing better: report it and say so, because a
+  // wrong address here fails later as "remote desktop just spins" rather
+  // than as anything that points back here.
+  if (routed) {
+    console.warn(`[agent-node] only a virtual-looking address is routable (${routed}); remote desktop may fail. Set SENTINEL_HOST_IP.`);
+    return routed;
+  }
+
+  console.warn("[agent-node] no usable IPv4 found — remote sessions to this machine will fail. Set SENTINEL_HOST_IP.");
+  return "0.0.0.0";
+}
+
+/**
+ * The machine's LAN address, resolved once at startup. The relay dials this
+ * to reach TightVNC, so getting it wrong means remote desktop never connects
+ * and there is nothing in the failure that points back here.
+ */
+let HOST_IP = "0.0.0.0";
 
 async function runCollectScript(): Promise<Record<string, unknown> | null> {
   try {
@@ -234,6 +317,16 @@ async function commandPollLoop() {
   }
 }
 
-console.log(`[agent-node] starting for branch ${BRANCH_NAME} (${BRANCH_SLUG}), control plane ${CONTROL_PLANE_URL}`);
-void heartbeatLoop();
-void commandPollLoop();
+async function main() {
+  // Resolved before the first heartbeat, not lazily: the address is part of
+  // the very first payload, and an asset provisioned with the wrong one keeps
+  // it until something overwrites it.
+  HOST_IP = await resolveHostIp();
+  console.log(
+    `[agent-node] starting for branch ${BRANCH_NAME} (${BRANCH_SLUG}) as ${HOST_IP}, control plane ${CONTROL_PLANE_URL}`,
+  );
+  void heartbeatLoop();
+  void commandPollLoop();
+}
+
+void main();

@@ -46,6 +46,90 @@ const SERVABLE_SCRIPTS = new Set([
 ]);
 
 /**
+ * The double-clickable launchers, for people who would rather not paste a
+ * command into PowerShell. Both do the same thing the one-liner does: fetch
+ * bootstrap.ps1 from here and run it. Neither makes a decision about the
+ * machine — install-sentinel-agent.ps1 still shows its disclosure and still
+ * waits for a typed INSTALL. See installer/README.md.
+ *
+ * Same allowlist discipline as SERVABLE_SCRIPTS, and for the same reason:
+ * the key is a Set-membership test and the matched *constant* is what gets
+ * joined onto the path, so no caller-supplied string reaches the filesystem.
+ * These live outside scripts/, which is precisely why they get their own map
+ * with the relative path spelled out rather than a second directory the
+ * `:file` route could be pointed at.
+ */
+interface InstallerArtifact {
+  /** Repo-relative path. A constant — never assembled from request input. */
+  readonly path: string;
+  readonly contentType: string;
+  /**
+   * Text artifacts are re-line-ended to CRLF on the way out (see
+   * readInstallerArtifact). Binaries are served byte-for-byte.
+   */
+  readonly text: boolean;
+  readonly description: string;
+}
+
+const SERVABLE_INSTALLER_ARTIFACTS = new Map<string, InstallerArtifact>([
+  [
+    "SentinelSetup.cmd",
+    {
+      path: "installer/SentinelSetup.cmd",
+      contentType: "application/octet-stream",
+      text: true,
+      description: "Double-click launcher. Plain text, readable in Notepad, no compiler needed.",
+    },
+  ],
+  [
+    "SentinelSetup.exe",
+    {
+      path: "installer/dist/SentinelSetup.exe",
+      contentType: "application/octet-stream",
+      text: false,
+      description: "Double-click launcher, compiled. Unsigned, so downloading it trips SmartScreen.",
+    },
+  ],
+]);
+
+/**
+ * Reads one allowlisted launcher. `null` means this deployment does not have
+ * that file, which for the .exe is the *expected* state and not a fault —
+ * see the 503 the route returns and installer/README.md for why the binary
+ * is not committed.
+ */
+function readInstallerArtifact(artifact: InstallerArtifact): Buffer | null {
+  const root = locateRepoRoot();
+  if (!root) return null;
+
+  // artifact.path is a module constant, so this join cannot escape the repo.
+  // Kept explicit rather than clever so the next person adding an entry to
+  // SERVABLE_INSTALLER_ARTIFACTS can see that the value must stay a literal.
+  const path = resolve(root, ...artifact.path.split("/"));
+  if (!path.startsWith(resolve(root) + sep)) return null;
+
+  try {
+    const bytes = readFileSync(path);
+    if (!artifact.text) return bytes;
+
+    /**
+     * CRLF, unconditionally.
+     *
+     * A .cmd with bare LF endings is a genuine hazard rather than a
+     * cosmetic one: cmd.exe tolerates it for simple lines but mis-parses
+     * `goto` labels and parenthesised blocks, both of which this file uses.
+     * Render checks the repo out on Linux, and git is entitled to normalise
+     * line endings in the working tree on the way there, so what is on disk
+     * at serve time is not something this route can assume. Normalising here
+     * costs one pass over five kilobytes and removes the whole question.
+     */
+    return Buffer.from(bytes.toString("utf-8").replace(/\r?\n/g, "\r\n"), "utf-8");
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Branches a laptop may enroll into.
  *
  * Deliberately a copy of the `$Branches` list in
@@ -145,6 +229,17 @@ export function registerEnrollRoutes(app: FastifyInstance): void {
       scripts: [...SERVABLE_SCRIPTS].map((name) => `${base}/v1/enroll/${name}`),
       archive: `${base}/v1/enroll/repo.zip`,
       branches: `${base}/v1/enroll/branches`,
+      // `available` is checked on every request rather than cached, because
+      // the .exe is the one artifact a deployment may legitimately not have
+      // (see readInstallerArtifact) and the enrollment page uses this to
+      // decide whether to offer the download at all. Offering a button that
+      // 503s is worse than not offering it.
+      installers: [...SERVABLE_INSTALLER_ARTIFACTS].map(([name, artifact]) => ({
+        file: name,
+        url: `${base}/v1/enroll/installer/${name}`,
+        description: artifact.description,
+        available: readInstallerArtifact(artifact) !== null,
+      })),
     });
   });
 
@@ -205,6 +300,67 @@ export function registerEnrollRoutes(app: FastifyInstance): void {
       .header("content-type", "application/zip")
       .header("content-disposition", 'attachment; filename="it-sentinel.zip"')
       .send(archive);
+  });
+
+  /**
+   * The double-clickable launchers.
+   *
+   * Its own path segment rather than another entry on the `:file` route,
+   * because these are not scripts/ and the one thing that route's allowlist
+   * must never learn to do is point at a second directory.
+   *
+   * Always `Content-Disposition: attachment`: a browser that renders a .cmd
+   * inline gives somebody a page of text with no obvious way to save it, and
+   * one that decides to *run* a downloaded .exe on its own is a category of
+   * surprise this route should not be capable of causing.
+   */
+  app.get<{ Params: { file: string } }>("/v1/enroll/installer/:file", async (request, reply) => {
+    const name = request.params.file;
+    const artifact = SERVABLE_INSTALLER_ARTIFACTS.get(name);
+
+    if (!artifact) {
+      return reply.code(404).send({
+        error: "unknown_installer",
+        message: `Not an enrollment launcher. Available: ${[...SERVABLE_INSTALLER_ARTIFACTS.keys()].join(", ")}`,
+      });
+    }
+
+    const body = readInstallerArtifact(artifact);
+    if (body === null) {
+      const base = publicBaseUrl(request.headers.host ?? request.hostname);
+      /**
+       * 503 and not 404, and with a message aimed at whoever is standing at
+       * the laptop rather than at the operator.
+       *
+       * For SentinelSetup.exe this is the ordinary state of a hosted
+       * deployment: the binary is built by csc.exe on Windows and is not
+       * committed (installer/README.md, §"Why the .exe is not in git"), and
+       * Render builds on Linux, so it cannot be produced at deploy time
+       * either. Rather than pretend, the route names the two things that DO
+       * work here and are equivalent in every way that matters.
+       */
+      return reply.code(503).send({
+        error: "installer_unavailable",
+        message:
+          `${name} is not available from this control plane. ` +
+          `Use ${base}/v1/enroll/installer/SentinelSetup.cmd, which does the same job, ` +
+          `or paste the one-liner: irm ${base}/v1/enroll/bootstrap.ps1 | iex`,
+        alternatives: {
+          cmd: `${base}/v1/enroll/installer/SentinelSetup.cmd`,
+          oneLiner: `irm ${base}/v1/enroll/bootstrap.ps1 | iex`,
+        },
+      });
+    }
+
+    return reply
+      .code(200)
+      .header("content-type", artifact.contentType)
+      .header("content-disposition", `attachment; filename="${name}"`)
+      // Nothing here is per-user and the file only changes on a redeploy,
+      // but a stale launcher pointed at a decommissioned hub is a bad hour
+      // for somebody, so this is deliberately short rather than immutable.
+      .header("cache-control", "public, max-age=300")
+      .send(body);
   });
 
   /**

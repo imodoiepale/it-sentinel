@@ -1,11 +1,11 @@
 <#
   Runs on the target machine via Invoke-Command (WinRM/PS-remoting) from
   agent-less. Emits one JSON object matching HeartbeatPayload's detail
-  fields (packages/contracts/src/heartbeat.ts) — the Node side wraps this
+  fields (packages/contracts/src/heartbeat.ts) -- the Node side wraps this
   with the summary fields and posts it to /v1/heartbeat unchanged in shape.
 
   Deliberately read-only: every cmdlet here inspects state, none of them
-  change it. agent-less has no write/elevated-execution surface — that is
+  change it. agent-less has no write/elevated-execution surface -- that is
   agent-node's job once it is deployed to a branch.
 #>
 
@@ -32,7 +32,19 @@ $volumes = Get-CimInstance Win32_LogicalDisk -Filter "DriveType=3" | ForEach-Obj
 
 $defender = Get-SafeValue { Get-MpComputerStatus }
 $printers = Get-CimInstance Win32_Printer | ForEach-Object {
-  $jobs = Get-SafeValue { (Get-CimInstance Win32_PrintJob -Filter "Name LIKE '$($_.Name -replace \"'\", \"''\")%'").Count } 0
+  # The WQL filter is built in two steps on purpose. Inlining the -replace in
+  # a subexpression needed nested double quotes, which were written C-style
+  # as \" -- not a PowerShell escape, so the string terminated early and the
+  # whole file failed to parse. A parse error here is total: collect.ps1
+  # never runs, so the machine never heartbeats and simply never appears.
+  #
+  # Doubling the apostrophe is WQL's own escape, needed for names like
+  # "Bob's Printer" which would otherwise close the quoted literal.
+  $printerName = $_.Name -replace "'", "''"
+  # Match on "<printer>,%" rather than "<printer>%": Win32_PrintJob names are
+  # "<printer>, <jobid>", so a bare prefix makes "XP-80C" also count every job
+  # queued on "XP-80C (copy 1)" and report one printer's backlog on another.
+  $jobs = Get-SafeValue { (Get-CimInstance Win32_PrintJob -Filter "Name LIKE '$printerName,%'").Count } 0
   [ordered]@{
     name = $_.Name
     driver = $_.DriverName
@@ -117,7 +129,11 @@ $result = [ordered]@{
     portReachable = (Get-SafeValue { (Test-NetConnection -ComputerName 'localhost' -Port 5900 -WarningAction SilentlyContinue).TcpTestSucceeded } $false)
   }
   security = [ordered]@{
-    product = (Get-SafeValue { $defender.AMServiceEnabled ? 'Windows Defender' : $null })
+    # if/else rather than a ternary: `?:` is PowerShell 7 only, and
+    # agent-less runs this same collector through WinRM, where the remote
+    # session is Windows PowerShell 5.1 by default and would fail to parse
+    # the whole file.
+    product = (Get-SafeValue { if ($defender.AMServiceEnabled) { 'Windows Defender' } else { $null } })
     serviceRunning = (Get-SafeValue { $defender.AMServiceEnabled } $false)
     protectionEnabled = (Get-SafeValue { $defender.RealTimeProtectionEnabled } $false)
     definitionsAgeHours = (Get-SafeValue { [math]::Round(((Get-Date) - $defender.AntivirusSignatureLastUpdated).TotalHours, 1) })

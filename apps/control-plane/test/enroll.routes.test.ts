@@ -1,5 +1,8 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import Fastify from "fastify";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 /**
  * The enrollment routes are the only part of this service that reads files
@@ -218,6 +221,148 @@ describe("GET /v1/enroll/repo.zip", () => {
   });
 });
 
+describe("GET /v1/enroll/installer/:file", () => {
+  it("serves SentinelSetup.cmd as a download rather than a page of text", async () => {
+    const res = await get("/v1/enroll/installer/SentinelSetup.cmd");
+    expect(res.statusCode).toBe(200);
+    // Without this a browser renders the launcher inline and the person who
+    // clicked "download" gets a wall of batch script and no file.
+    expect(res.headers["content-disposition"]).toBe('attachment; filename="SentinelSetup.cmd"');
+    expect(res.rawPayload.toString("utf-8")).toContain("IT SENTINEL");
+  });
+
+  /**
+   * cmd.exe mis-parses `goto` labels and parenthesised blocks in a file with
+   * bare LF endings, and SentinelSetup.cmd uses both. Render checks out on
+   * Linux, where git may well have normalised the working tree to LF, so the
+   * route normalises on the way out and this is the assertion that says so.
+   */
+  it("serves the .cmd with CRLF line endings whatever is on disk", async () => {
+    const body = (await get("/v1/enroll/installer/SentinelSetup.cmd")).rawPayload.toString("utf-8");
+
+    expect(body).toContain("\r\n");
+    // No bare LF anywhere: every \n must be preceded by \r.
+    expect(/(?<!\r)\n/.test(body)).toBe(false);
+  });
+
+  it("keeps the .cmd pure ASCII, so no console code page can mangle it", async () => {
+    // A smart quote or an en-dash pasted into the launcher renders as
+    // mojibake under any OEM code page but the author's. Asserted at the
+    // route because that is the copy a teammate actually receives.
+    const bytes = (await get("/v1/enroll/installer/SentinelSetup.cmd")).rawPayload;
+    expect([...bytes].filter((b) => b > 127)).toEqual([]);
+  });
+
+  /**
+   * Same discipline as the scripts route, exercised the same way: the
+   * parameter is a Map key, never a path fragment, so no encoding of `..`
+   * reaches the filesystem. This route is the more tempting target of the
+   * two — it is the one that reads outside scripts/.
+   */
+  const TRAVERSALS = [
+    "..%2f..%2f.env",
+    "..%2F..%2Fscripts%2Fbootstrap.ps1",
+    "%2e%2e%2f%2e%2e%2f.env",
+    "....%2f%2f....%2f%2f.env",
+    "..%2fSentinelSetup.cmd",
+    ".env",
+    "C:%5CWindows%5Cwin.ini",
+    "%2Fetc%2Fpasswd",
+    "SentinelSetup.cmd%00.env",
+    "SentinelSetup.cmd.",
+    "sentinelsetup.cmd",
+    "build.ps1",
+    "SentinelSetup.cs",
+  ];
+
+  for (const attempt of TRAVERSALS) {
+    it(`refuses ${attempt}`, async () => {
+      const res = await get(`/v1/enroll/installer/${attempt}`);
+      expect(res.statusCode).toBe(404);
+      expect(res.json().error).toBe("unknown_installer");
+    });
+  }
+
+  it("refuses an un-encoded traversal too", async () => {
+    const res = await get("/v1/enroll/installer/../../../../etc/passwd");
+    expect(res.statusCode).toBe(404);
+  });
+
+  it("does not let the installer route reach a servable script", async () => {
+    // bootstrap.ps1 is legitimately served by /v1/enroll/:file. It must not
+    // also be reachable here, because "the allowlists happen to overlap" is
+    // how a second directory quietly becomes servable.
+    const res = await get("/v1/enroll/installer/bootstrap.ps1");
+    expect(res.statusCode).toBe(404);
+  });
+
+  /**
+   * SentinelSetup.exe is built by csc.exe on Windows and is deliberately not
+   * committed, so a hosted deployment usually does not have it. Both answers
+   * are correct; what must never happen is a bare 404 or an empty body that
+   * leaves somebody thinking the download is broken.
+   */
+  it("either serves the .exe or explains where to go instead", async () => {
+    const res = await get("/v1/enroll/installer/SentinelSetup.exe");
+
+    if (res.statusCode === 200) {
+      expect(res.headers["content-disposition"]).toBe('attachment; filename="SentinelSetup.exe"');
+      // MZ. Serving a truncated or text-mangled binary is worse than
+      // serving nothing, because the failure surfaces on the laptop.
+      expect(res.rawPayload.subarray(0, 2).toString("latin1")).toBe("MZ");
+      expect(res.rawPayload.length).toBeGreaterThan(4096);
+    } else {
+      expect(res.statusCode).toBe(503);
+      const body = res.json();
+      expect(body.error).toBe("installer_unavailable");
+      expect(body.alternatives.cmd).toContain("/v1/enroll/installer/SentinelSetup.cmd");
+      expect(body.alternatives.oneLiner).toContain("| iex");
+    }
+  });
+});
+
+describe("GET /v1/enroll/installer/:file with no checkout to read", () => {
+  // A repo root that satisfies locateRepoRoot's marker but has no installer/
+  // in it — which is exactly the shape of a deployment that cannot serve the
+  // launchers. Without this the 503 branch is untested on any machine that
+  // has run installer\build.ps1.
+  let root: string;
+  let previous: string | undefined;
+
+  beforeEach(() => {
+    previous = process.env.SENTINEL_REPO_ROOT;
+    root = mkdtempSync(join(tmpdir(), "sentinel-noinstaller-"));
+    mkdirSync(join(root, "scripts"), { recursive: true });
+    writeFileSync(join(root, "scripts", "bootstrap.ps1"), "# IT Sentinel\n");
+    process.env.SENTINEL_REPO_ROOT = root;
+  });
+
+  afterEach(() => {
+    if (previous === undefined) delete process.env.SENTINEL_REPO_ROOT;
+    else process.env.SENTINEL_REPO_ROOT = previous;
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  it("returns 503 naming the two things that do work", async () => {
+    const res = await get("/v1/enroll/installer/SentinelSetup.cmd");
+    expect(res.statusCode).toBe(503);
+
+    const body = res.json();
+    expect(body.error).toBe("installer_unavailable");
+    // The point of the message: never a dead end.
+    expect(body.message).toContain("SentinelSetup.cmd");
+    expect(body.alternatives.oneLiner).toContain("/v1/enroll/bootstrap.ps1");
+  });
+
+  it("still refuses an unknown name rather than reporting it unavailable", async () => {
+    // Allowlist first, disk second. Getting that order wrong would turn the
+    // 503 into an oracle for which paths exist on the server.
+    const res = await get("/v1/enroll/installer/.env");
+    expect(res.statusCode).toBe(404);
+    expect(res.json().error).toBe("unknown_installer");
+  });
+});
+
 describe("GET /v1/enroll", () => {
   it("tells a browser what to do instead of returning a bare 404", async () => {
     const res = await get("/v1/enroll");
@@ -227,5 +372,20 @@ describe("GET /v1/enroll", () => {
     expect(body.oneLiner).toContain("/v1/enroll/bootstrap.ps1");
     expect(body.oneLiner).toContain("| iex");
     expect(body.archive).toContain("/v1/enroll/repo.zip");
+  });
+
+  it("reports which launchers this deployment can actually serve", async () => {
+    // The enrollment page reads this to decide whether to render the .exe
+    // download at all, so `available` has to reflect the disk rather than
+    // the allowlist.
+    const body = (await get("/v1/enroll")).json();
+    const byFile = new Map(body.installers.map((i: any) => [i.file, i]));
+
+    expect(byFile.get("SentinelSetup.cmd")).toMatchObject({ available: true });
+    expect((byFile.get("SentinelSetup.cmd") as any).url).toContain("/v1/enroll/installer/SentinelSetup.cmd");
+
+    const exe = byFile.get("SentinelSetup.exe") as any;
+    expect(exe.url).toContain("/v1/enroll/installer/SentinelSetup.exe");
+    expect(exe.available).toBe(existsSync(join(process.cwd(), "..", "..", "installer", "dist", "SentinelSetup.exe")));
   });
 });

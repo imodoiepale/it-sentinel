@@ -70,11 +70,29 @@ const DOWNLOADS = [
   },
 ];
 
+/**
+ * Whether this control plane can actually hand out each launcher, from
+ * `GET /v1/enroll`.
+ *
+ * Asked rather than assumed because `SentinelSetup.exe` is compiled by
+ * csc.exe on Windows and is deliberately not committed, so the hosted
+ * deployment — which builds on Linux — usually does not have one. Rendering
+ * a download button that 503s is worse than rendering no button, and worse
+ * still on the one day somebody is standing at a strange laptop.
+ */
+interface Installer {
+  file: string;
+  url: string;
+  description: string;
+  available: boolean;
+}
+
 export default function EnrollPage() {
   const router = useRouter();
   const { session, loading: authLoading } = useAuth();
 
   const [branches, setBranches] = useState<Branch[]>(FALLBACK_BRANCHES);
+  const [installers, setInstallers] = useState<Installer[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [copyFailed, setCopyFailed] = useState(false);
@@ -99,10 +117,27 @@ export default function EnrollPage() {
         // person reading it does not have.
       });
 
+    fetch(`${CONTROL_PLANE}/v1/enroll`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((body) => {
+        if (cancelled || !Array.isArray(body?.installers)) return;
+        setInstallers(body.installers);
+      })
+      .catch(() => {
+        // Silent, like the branch fetch above and for the same reason: the
+        // section this feeds simply does not render, and the PowerShell
+        // command — which is the path that always works — is already on
+        // screen. An error banner would report a problem the reader does
+        // not have.
+      });
+
     return () => {
       cancelled = true;
     };
   }, [session]);
+
+  const cmdInstaller = installers.find((i) => i.file === "SentinelSetup.cmd" && i.available);
+  const exeInstaller = installers.find((i) => i.file === "SentinelSetup.exe" && i.available);
 
   /**
    * The scriptblock form rather than plain `irm | iex`, because `iex` on a
