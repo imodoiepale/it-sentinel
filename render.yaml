@@ -21,8 +21,10 @@ services:
     startCommand: node apps/control-plane/dist/main.js
     healthCheckPath: /healthz
     envVars:
+      # Node 20 has no global WebSocket; @supabase/realtime-js requires one
+      # and the control plane dies at import time on startup without it.
       - key: NODE_VERSION
-        value: "20"
+        value: "22"
       - key: SUPABASE_URL
         value: https://ncyerayycwkqytznnkrs.supabase.co
       - key: SUPABASE_SERVICE_ROLE_KEY
@@ -48,8 +50,10 @@ services:
     buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter @it-sentinel/web build
     startCommand: pnpm --filter @it-sentinel/web start
     envVars:
+      # Node 20 has no global WebSocket; @supabase/realtime-js requires one
+      # and the control plane dies at import time on startup without it.
       - key: NODE_VERSION
-        value: "20"
+        value: "22"
       - key: NEXT_PUBLIC_SUPABASE_URL
         value: https://ncyerayycwkqytznnkrs.supabase.co
       # Browser-safe by design, so committing it would be acceptable — but it
