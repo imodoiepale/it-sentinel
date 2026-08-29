@@ -64,7 +64,7 @@ export default function CommandCenter() {
 
   if (error) {
     return (
-      <div className="p-8 text-critical">
+      <div className="p-8 text-critical-ink">
         Failed to load fleet data: {error}
         <div className="text-gray-500 text-sm mt-2">
           Check this operator has a site_access grant — RLS shows nothing at all otherwise, by design.
@@ -76,17 +76,19 @@ export default function CommandCenter() {
   return (
     <div className="flex h-screen bg-[#0b0f14]">
       <BranchSidebar branches={branches} selectedSlug={selectedSlug} onSelect={setSelectedSlug} />
-      <div className="flex-1 flex flex-col">
-        <header className="p-4 border-b border-white/10 flex items-center justify-between">
-          <div>
-            <h1 className="text-lg font-semibold">{selectedBranch ? selectedBranch.name : "All Branches"}</h1>
-            <p className="text-xs text-gray-500">
+      <div className="flex-1 flex flex-col min-w-0">
+        <header className="px-5 py-3.5 border-b border-white/10 flex items-center justify-between gap-4 bg-[#080b0f]">
+          <div className="min-w-0">
+            <h1 className="text-lg font-semibold tracking-tight truncate">
+              {selectedBranch ? selectedBranch.name : "All branches"}
+            </h1>
+            <p className="text-xs text-muted mt-0.5">
               {loading
                 ? "Loading…"
                 : `${branches.reduce((n, b) => n + b.assets.length, 0)} machines across ${branches.length} branches`}
             </p>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-4 shrink-0">
             {selectedBranch && (
               <StatusDot status={selectedBranch.overallStatus} label={`${selectedBranch.name}: ${selectedBranch.overallStatus}`} />
             )}
@@ -96,7 +98,11 @@ export default function CommandCenter() {
                 setSelectedSlug(slug);
               }}
             />
-            <button onClick={() => signOut()} className="text-xs text-gray-500 hover:text-white">
+            <button
+              type="button"
+              onClick={() => signOut()}
+              className="text-xs text-muted hover:text-white"
+            >
               Sign out
             </button>
           </div>

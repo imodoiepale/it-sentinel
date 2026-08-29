@@ -6,6 +6,13 @@ import { matchDenyPattern } from "./deny-list.js";
 import { assertWithinTierAllowlist, TierViolationError } from "./tier-resolver.js";
 import { resolveApp, UnknownAppError, launchIsVisible } from "./app-launcher.js";
 import { resolveService, serviceCommandFor, UnknownServiceError } from "./service-actions.js";
+import {
+  closeCommandFor,
+  NotClosableError,
+  ProtectedProcessError,
+  resolveClosableProcess,
+  UnknownProcessError,
+} from "./process-control.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -121,6 +128,48 @@ export async function executeCommand(request: CommandRequest, deps: ExecutorDeps
       commandTextToCheck = resolveApp(parsed.appId).command;
     } catch (err) {
       if (err instanceof UnknownAppError) {
+        await deps.auditRefusal(parsed, err.message);
+        return makeRefusedResult(parsed, err.message);
+      }
+      throw err;
+    }
+  }
+
+  if (parsed.kind === "app_close") {
+    if (!parsed.closeAppId) {
+      const reason = "app_close request missing closeAppId";
+      await deps.auditRefusal(parsed, reason);
+      return makeRefusedResult(parsed, reason);
+    }
+
+    /**
+     * T3 Remediate is the floor, same as service_action and for the same
+     * reason: terminating a running process changes the machine's state, and
+     * it can destroy work — the graceful pass in process-control.ts gives the
+     * app a chance to save, but the force pass that follows does not. A
+     * read-only tier must not reach it. T3's allowlist is where the floor
+     * comes from; T4 and T5 sit above it and are permitted for the same
+     * reason. Note this kind never reaches the tier allowlist below, so
+     * saying so here is the only place it gets said.
+     */
+    if (parsed.tier !== "T3" && parsed.tier !== "T4" && parsed.tier !== "T5") {
+      const reason = `closing an application terminates a running process and requires T3 or above, request was ${parsed.tier}`;
+      await deps.auditRefusal(parsed, reason);
+      return makeRefusedResult(parsed, reason);
+    }
+
+    try {
+      // The command text is built entirely from the allowlist table, NOT from
+      // the request — so the deny-list check below still runs against real
+      // executable text, and a caller cannot smuggle anything through
+      // closeAppId.
+      commandTextToCheck = closeCommandFor(resolveClosableProcess(parsed.closeAppId));
+    } catch (err) {
+      if (
+        err instanceof UnknownProcessError ||
+        err instanceof NotClosableError ||
+        err instanceof ProtectedProcessError
+      ) {
         await deps.auditRefusal(parsed, err.message);
         return makeRefusedResult(parsed, err.message);
       }

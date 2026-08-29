@@ -1,6 +1,6 @@
 # 04 — Database
 
-Postgres via Supabase. Project: **`IT COMMAND CENTER`**, ref `ncyerayycwkqytznnkrs`, region `eu-central-1`, Postgres 17.
+Postgres via Supabase. Project: **`IT COMMAND CENTER`**, ref `ncyerayycwkqytznnkrs`, region `eu-west-1`, Postgres 17.
 
 ## Migrations — applied in order, this is the schema's real history
 

@@ -211,6 +211,7 @@ const ACTION_ROUTES = [
   ["/v1/voice/status", { branch: "Lagos" }],
   ["/v1/voice/open", { branch: "Lagos" }],
   ["/v1/voice/launch", { branch: "Lagos", app: "notepad" }],
+  ["/v1/voice/close", { branch: "Lagos", app: "notepad" }],
   ["/v1/voice/cameras", { branch: "all" }],
 ] as const;
 
@@ -289,6 +290,86 @@ describe("service control", () => {
   it("asks which service rather than guessing when none is given", async () => {
     await call("/v1/voice/service", { branch: "Lagos", action: "restart" });
     expect(state.dispatched).toHaveLength(0);
+  });
+});
+
+describe("closing an app is the counterpart to opening one", () => {
+  // The gap this closes: an operator could open Notepad and the Camera app
+  // on a machine across the room and had no way to get rid of them.
+  it("dispatches kind app_close at T3, carrying the identifier and no command text", async () => {
+    await call("/v1/voice/close", { branch: "Lagos", app: "notepad" });
+    expect(state.dispatched).toHaveLength(1);
+    expect(state.dispatched[0]).toMatchObject({ kind: "app_close", closeAppId: "notepad", tier: "T3" });
+    // The wire envelope carries an identifier, never anything executable.
+    expect(state.dispatched[0].adhocCommand).toBeUndefined();
+  });
+
+  it("is dispatched a tier above the launch it undoes", async () => {
+    // Opening a window changes no state; terminating a process can take
+    // unsaved work with it, so it sits at the remediation tier.
+    await call("/v1/voice/launch", { branch: "Lagos", app: "notepad" });
+    await call("/v1/voice/close", { branch: "Lagos", app: "notepad" });
+    expect(state.dispatched[0].tier).toBe("T2");
+    expect(state.dispatched[1].tier).toBe("T3");
+  });
+
+  it("closes on the same machine a hostname-less launch opened on", async () => {
+    state.assets = [
+      { id: "asset-1", hostname: "LAGOS-POS-01", ip: "192.168.1.11", site_id: "site-1" },
+      { id: "asset-2", hostname: "LAGOS-POS-02", ip: "192.168.1.12", site_id: "site-1" },
+    ];
+    await call("/v1/voice/launch", { branch: "Lagos", app: "notepad" });
+    await call("/v1/voice/close", { branch: "Lagos", app: "notepad" });
+    expect(state.dispatched[1].assetIds).toEqual(state.dispatched[0].assetIds);
+  });
+
+  it("targets the named machine when a hostname is given", async () => {
+    state.assets = [
+      { id: "asset-1", hostname: "LAGOS-POS-01", ip: "192.168.1.11", site_id: "site-1" },
+      { id: "asset-2", hostname: "LAGOS-POS-02", ip: "192.168.1.12", site_id: "site-1" },
+    ];
+    await call("/v1/voice/close", { branch: "Lagos", app: "camera", hostname: "POS-02" });
+    expect(state.dispatched[0].assetIds).toEqual(["asset-2"]);
+  });
+
+  it("asks which machine rather than guessing when the hostname matches several", async () => {
+    state.assets = [
+      { id: "asset-1", hostname: "LAGOS-POS-01", ip: "192.168.1.11", site_id: "site-1" },
+      { id: "asset-2", hostname: "LAGOS-POS-02", ip: "192.168.1.12", site_id: "site-1" },
+    ];
+    const res = await call("/v1/voice/close", { branch: "Lagos", app: "notepad", hostname: "POS" });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().status).toBe(409);
+    expect(state.dispatched).toHaveLength(0);
+  });
+
+  it("says so rather than dispatching into the void when the hostname is unknown", async () => {
+    const res = await call("/v1/voice/close", { branch: "Lagos", app: "notepad", hostname: "DUBAI-POS-09" });
+    expect(res.json().status).toBe(404);
+    expect(state.dispatched).toHaveLength(0);
+  });
+
+  it("asks which app rather than guessing when none is given", async () => {
+    const res = await call("/v1/voice/close", { branch: "Lagos" });
+    expect(state.dispatched).toHaveLength(0);
+    expect(res.json().speech).toMatch(/which application/i);
+  });
+
+  it("speaks the contract label, and does not claim the app is already gone", async () => {
+    const res = await call("/v1/voice/close", { branch: "Lagos", app: "camera" });
+    expect(res.json().speech).toContain("the Camera app");
+    // Dispatch is asynchronous — the agent must not announce a completed
+    // close any more than it announces a completed fix.
+    expect(res.json().speech).not.toMatch(/\b(closed|gone|shut down)\b/i);
+  });
+
+  it("surfaces a policy refusal as speech rather than crashing", async () => {
+    const { CommandDeniedError } = await import("../src/orchestrator/orchestrator.service.js");
+    state.dispatchThrows = new CommandDeniedError("tier T3 exceeds your ceiling");
+    const res = await call("/v1/voice/close", { branch: "Lagos", app: "notepad" });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().status).toBe(403);
+    expect(res.json().speech).toContain("refused by policy");
   });
 });
 

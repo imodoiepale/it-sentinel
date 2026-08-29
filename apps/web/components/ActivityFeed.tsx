@@ -183,16 +183,16 @@ export function ActivityFeed({ assets }: Props) {
   }, []);
 
   return (
-    <aside className="w-80 shrink-0 border-l border-white/10 bg-black/20 flex flex-col">
-      <div className="p-3 border-b border-white/10 flex items-center justify-between">
-        <div className="text-xs uppercase tracking-wide text-gray-400">Live activity</div>
+    <aside className="w-80 shrink-0 border-l border-white/10 bg-[#080b0f] flex flex-col">
+      <div className="p-3.5 border-b border-white/10 flex items-center justify-between">
+        <div className="text-[11px] font-medium uppercase tracking-wider text-gray-500">Live activity</div>
         <div className="flex items-center gap-1.5" role="status">
           <span
-            className={`h-2 w-2 rounded-full ${connected ? "bg-healthy animate-pulse" : "bg-stale"}`}
+            className={`h-2 w-2 rounded-full ${connected ? "bg-healthy animate-breathe" : "bg-stale"}`}
             aria-hidden
           />
           {/* Never colour alone, per StatusDot: the word carries the state too. */}
-          <span className={`text-[11px] ${connected ? "text-healthy" : "text-gray-500"}`}>
+          <span className={`text-[11px] ${connected ? "text-healthy-ink" : "text-gray-500"}`}>
             {connected ? "Live" : "Connecting…"}
           </span>
           <span className="sr-only">
@@ -203,7 +203,7 @@ export function ActivityFeed({ assets }: Props) {
 
       <ol className="flex-1 overflow-y-auto" role="log" aria-live="polite" aria-relevant="additions">
         {events.length === 0 && (
-          <li className="p-3 text-xs text-gray-500">
+          <li className="p-4 text-xs text-muted leading-relaxed">
             Watching the fleet. Alerts, status changes, sessions and spoken commands appear here the moment they
             happen.
           </li>

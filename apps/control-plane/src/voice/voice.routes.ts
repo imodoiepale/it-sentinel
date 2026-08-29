@@ -895,6 +895,12 @@ export function registerVoiceRoutes(app: FastifyInstance) {
           : `For remediation, I can ${spokenList(playbookLabels, "or")}.`,
         `I can start, stop or restart ${serviceLabels.length} services, including ${spokenList(serviceLabels.slice(0, 3))}.`,
         `I can open ${appLabels.length} applications, including ${spokenList(appLabels.slice(0, 3))}.`,
+        // Deliberately not enumerated: the closable set is a smaller,
+        // agent-side list (File Explorer and the management consoles are part
+        // of the desktop and are refused), and a second copy of it here would
+        // be the exact drift this route exists to avoid. Saying "ask me" is
+        // true whatever that list becomes; naming apps would not be.
+        "I can close most of those back down again too — ask me and I'll tell you if one can't be.",
         "And for remote control, I can put a branch's machine on your screen, or open the camera on every machine at once.",
       ];
 
@@ -1130,6 +1136,69 @@ export function registerVoiceRoutes(app: FastifyInstance) {
       return {
         speech: `Opening ${appId} on ${assets[0]!.hostname} at ${branch.name}.`,
         branch: branch.name,
+        commandIds,
+      };
+    }),
+  );
+
+  /**
+   * "Close Notepad on Lagos." — the counterpart to /launch.
+   *
+   * Every launch was a one-way door until this existed: an operator could
+   * open the Camera app on a machine across the room and then had to walk
+   * over to it. The app identifier is resolved against an allowlist on the
+   * agent, never interpolated into a Stop-Process — see
+   * apps/agent-node/src/exec/process-control.ts, which also refuses to
+   * terminate the agent, the remote-desktop server, or anything
+   * Windows-critical no matter who asks.
+   *
+   * T3, not the T2 that /launch uses: opening a window changes no state and
+   * the person at the machine can close it, whereas terminating a process
+   * can take unsaved work with it.
+   */
+  app.post(
+    "/v1/voice/close",
+    handle(async (body) => {
+      const branch = await resolveBranch(String(body.branch ?? ""));
+      const appId = String(body.app ?? body.appId ?? "").trim();
+      if (!appId) return { speech: "Which application should I close?" };
+      const hostnameHint = String(body.hostname ?? "").trim();
+
+      const { data: assets, error } = await db.from("assets").select("id, hostname").eq("site_id", branch.id).is("decommissioned_at", null);
+      if (error) throw error;
+      if (!assets?.length) throw new VoiceError(404, `${branch.name} has no machines registered.`);
+
+      // Defaults to the same machine /launch targets, so "open Notepad" and
+      // "close Notepad" without a hostname act on the same box rather than
+      // leaving the window open on one and closing nothing on another.
+      let target = assets[0]!;
+      if (hostnameHint) {
+        const matches = assets.filter((a) => a.hostname.toLowerCase().includes(hostnameHint.toLowerCase()));
+        if (matches.length === 0) {
+          throw new VoiceError(404, `I can't find a machine called ${hostnameHint} at ${branch.name}.`);
+        }
+        if (matches.length > 1) {
+          throw new VoiceError(409, `${branch.name} has ${matches.length} machines matching ${hostnameHint}. Which one?`);
+        }
+        target = matches[0]!;
+      }
+
+      const operatorId = await resolveVoiceOperator();
+      const { commandIds } = await dispatchCommand({
+        assetIds: [target.id],
+        operatorId,
+        kind: "app_close",
+        closeAppId: appId,
+        tier: VOICE_REMEDIATION_TIER,
+      });
+
+      // The contract label where the id is one we know, so the agent says
+      // "the Camera app" rather than reading "camera" back at the operator.
+      const spoken = LAUNCHABLE_APPS[appId.toLowerCase() as keyof typeof LAUNCHABLE_APPS] ?? appId;
+      return {
+        speech: `Closing ${spoken} on ${target.hostname} at ${branch.name}.`,
+        branch: branch.name,
+        hostname: target.hostname,
         commandIds,
       };
     }),

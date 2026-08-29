@@ -24,6 +24,18 @@ This is the documentation for **IT Sentinel**, the Sentinel Global IT Operations
 18. **[18-decommissioning.md](./18-decommissioning.md)** — getting a machine cleanly out of the fleet (no agent, no telemetry, no remote access, no firewall hole left)
 19. **[19-enrollment.md](./19-enrollment.md)** — getting a machine into the fleet: pick a branch, copy one command
 
+## Operating it — the runbooks
+
+These five are written for the person holding the laptop, not the person reading the source.
+
+15. **[15-hackathon-demo-runbook.md](./15-hackathon-demo-runbook.md)** — seven laptops live and the demo run, in order; each step verifies the one before it
+16. **[16-elevenlabs-agent-config.md](./16-elevenlabs-agent-config.md)** — the voice agent's tools, prompt and system prompt, and the two things that most often break voice on stage
+17. **[17-fault-simulation.md](./17-fault-simulation.md)** — inducing a real, reversible fault on a branch laptop, and putting it back
+18. **[18-decommissioning.md](./18-decommissioning.md)** — getting a machine completely out of the fleet: no agent, no telemetry, nothing left behind
+19. **[19-enrollment.md](./19-enrollment.md)** — getting a machine in, from the `/enroll` page. **§5.2 documents the unauthenticated-heartbeat gap in full**
+
+The project [`README.md`](../README.md) is the public entry point and links back to every document here.
+
 ## The one-paragraph version
 
 Forty-four branches, one shared VNC password, and an IT team that only learns something's broken when a branch calls. IT Sentinel replaces that with a live fleet dashboard, telemetry from every machine, brokered remote access where the operator never sees a credential, elevated PowerShell execution locked behind a deny-list and hash-pinning that's been adversarially tested, voice control that resolves ambiguous branch names correctly, and an AI assistant whose capabilities are enforced by code, not by a prompt. TightVNC keeps running unmodified on every branch PC; nothing in this system copies its source.

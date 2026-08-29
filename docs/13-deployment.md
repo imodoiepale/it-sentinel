@@ -1,6 +1,21 @@
 # 13 — Deployment
 
-**Nothing in this system has been deployed to production yet.** This document describes how each piece is *meant* to run, based on how it's built — treat it as a plan, not a record of what's live.
+**This system is deployed and running.**
+
+| Piece | Where | Status |
+|---|---|---|
+| Control plane | https://it-sentinel-control-plane.onrender.com | Live, Render Starter, Frankfurt |
+| Web console | https://it-sentinel-web.onrender.com | Live, Render Starter, Frankfurt |
+| Database | Supabase `ncyerayycwkqytznnkrs`, `eu-west-1`, Postgres 17 | Live |
+| Voice agent | ElevenLabs Conversational AI, 15 webhook tools | Live |
+| VNC relay | The command laptop, on the branch LAN | Not cloud-hosted, and cannot be |
+
+The relay is the one piece that is deliberately not deployed: it opens TCP
+connections to branch machines on private `192.168.x.x` addresses, which no
+cloud host can route to. That is a routing fact, not a configuration choice.
+
+Deployment is defined by `render.yaml`; `scripts/configure-render.mjs` pushes
+the secrets from your local `.env` files without printing them.
 
 ## Environment variables, by app
 

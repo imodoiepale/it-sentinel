@@ -28,6 +28,20 @@ interface ReassignResult {
   alerts_moved: number;
 }
 
+function ramClass(usage: number | null) {
+  if (usage == null) return "text-muted";
+  if (usage >= 93) return "text-critical-ink";
+  if (usage >= 85) return "text-warning";
+  return "text-gray-200";
+}
+
+function diskClass(freePercent: number | null) {
+  if (freePercent == null) return "text-muted";
+  if (freePercent < 10) return "text-critical-ink";
+  if (freePercent < 15) return "text-warning";
+  return "text-gray-200";
+}
+
 /**
  * Branch · PC · Network · Email · Printer · Enquest · Security · RAM ·
  * Disk · VNC · Tickets — exactly the table from the plan, sortable, with
@@ -39,6 +53,7 @@ export function FleetTable({ rows, onOpenMachine, branches, onReassigned }: Prop
   // an empty table, which reads as "the app is broken" rather than
   // "everything is fine" — the wrong first impression for a wall display.
   const [onlyProblems, setOnlyProblems] = useState(false);
+  const [query, setQuery] = useState("");
 
   // Which row's move control is open, which destination is chosen, and
   // whether the operator has been asked to confirm yet. Keyed by assetId
@@ -57,16 +72,26 @@ export function FleetTable({ rows, onOpenMachine, branches, onReassigned }: Prop
   const [movedTo, setMovedTo] = useState<Record<string, string>>({});
 
   const visible = useMemo(() => {
-    if (!onlyProblems) return rows;
-    return rows.filter(
-      (r) =>
-        r.status !== "healthy" ||
-        r.printerStatus === "critical" ||
-        r.emailStatus === "critical" ||
-        r.endpointSecurityStatus === "critical" ||
-        r.enquestStatus === "critical",
-    );
-  }, [rows, onlyProblems]);
+    const needle = query.trim().toLowerCase();
+    return rows.filter((r) => {
+      if (onlyProblems) {
+        const problem =
+          r.status !== "healthy" ||
+          !r.online ||
+          r.printerStatus === "critical" ||
+          r.emailStatus === "critical" ||
+          r.endpointSecurityStatus === "critical" ||
+          r.enquestStatus === "critical";
+        if (!problem) return false;
+      }
+      if (!needle) return true;
+      return (
+        r.hostname.toLowerCase().includes(needle) ||
+        r.branchName.toLowerCase().includes(needle) ||
+        (movedTo[r.assetId] ?? "").toLowerCase().includes(needle)
+      );
+    });
+  }, [rows, onlyProblems, query, movedTo]);
 
   useEffect(() => {
     if (branches) setSites(branches);
@@ -144,12 +169,29 @@ export function FleetTable({ rows, onOpenMachine, branches, onReassigned }: Prop
   );
 
   return (
-    <div className="flex-1 overflow-auto">
-      <div className="flex items-center justify-between p-3 border-b border-white/10">
-        <div className="text-sm text-gray-400">{visible.length} of {rows.length} machines shown</div>
-        <label className="flex items-center gap-2 text-xs text-gray-400">
-          <input type="checkbox" checked={onlyProblems} onChange={(e) => setOnlyProblems(e.target.checked)} />
-          Only show what's broken
+    <div className="flex-1 overflow-auto min-w-0">
+      <div className="sticky top-0 z-10 bg-[#0b0f14]/95 backdrop-blur-sm flex flex-wrap items-center gap-3 px-4 py-3 border-b border-white/10">
+        <label className="relative min-w-[12rem] flex-1 max-w-sm">
+          <span className="sr-only">Search machines</span>
+          <input
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search hostname or branch…"
+            className="w-full rounded-md border border-white/10 bg-white/[0.04] px-3 py-1.5 text-sm text-gray-200 placeholder:text-gray-600"
+          />
+        </label>
+        <div className="text-sm text-muted tabular-nums">
+          {visible.length} of {rows.length} machines
+        </div>
+        <label className="ml-auto flex items-center gap-2 text-xs text-muted">
+          <input
+            type="checkbox"
+            checked={onlyProblems}
+            onChange={(e) => setOnlyProblems(e.target.checked)}
+            className="rounded border-white/20"
+          />
+          Only what&rsquo;s broken
         </label>
       </div>
       {notice && (
@@ -161,59 +203,96 @@ export function FleetTable({ rows, onOpenMachine, branches, onReassigned }: Prop
           aria-live="polite"
           // healthy-ink, not healthy: the tailwind config says why — the fill
           // teal is ~3.1:1 on this background and unreadable as text.
-          className={`px-3 py-2 text-xs border-b border-white/10 ${notice.tone === "ok" ? "text-healthy-ink" : "text-critical"}`}
+          className={`px-4 py-2 text-xs border-b border-white/10 ${notice.tone === "ok" ? "text-healthy-ink" : "text-critical-ink"}`}
         >
           <span className="sr-only">{notice.tone === "ok" ? "Success: " : "Error: "}</span>
           {notice.text}
         </div>
       )}
       <table className="w-full text-sm">
-        <thead className="text-left text-gray-500 text-xs uppercase">
+        <thead className="text-left text-gray-500 text-[11px] uppercase tracking-wider">
           <tr className="border-b border-white/10">
-            <th className="p-2">Machine</th>
-            <th className="p-2">Network</th>
-            <th className="p-2">Email</th>
-            <th className="p-2">Printer</th>
-            <th className="p-2">Enquest</th>
-            <th className="p-2">Security</th>
-            <th className="p-2">RAM</th>
-            <th className="p-2">Disk</th>
-            <th className="p-2">VNC</th>
-            <th className="p-2">Branch</th>
+            <th className="px-4 py-2.5 font-medium">Machine</th>
+            <th className="px-3 py-2.5 font-medium">Health</th>
+            <th className="px-3 py-2.5 font-medium">Network</th>
+            <th className="px-3 py-2.5 font-medium">Email</th>
+            <th className="px-3 py-2.5 font-medium">Printer</th>
+            <th className="px-3 py-2.5 font-medium">Enquest</th>
+            <th className="px-3 py-2.5 font-medium">Security</th>
+            <th className="px-3 py-2.5 font-medium">RAM</th>
+            <th className="px-3 py-2.5 font-medium">Disk</th>
+            <th className="px-3 py-2.5 font-medium">VNC</th>
+            <th className="px-3 py-2.5 font-medium">Branch</th>
           </tr>
         </thead>
         <tbody>
+          {rows.length === 0 && (
+            <tr>
+              <td colSpan={11} className="px-4 py-16 text-center text-sm text-muted">
+                No machines in this view yet. Enrol an agent, or pick another branch.
+              </td>
+            </tr>
+          )}
+          {rows.length > 0 && visible.length === 0 && (
+            <tr>
+              <td colSpan={11} className="px-4 py-16 text-center text-sm text-muted">
+                {onlyProblems
+                  ? "Nothing looks broken in this set. Clear the filter to see every machine."
+                  : `No machine matches “${query.trim()}”.`}
+              </td>
+            </tr>
+          )}
           {visible.map((r) => (
             <tr
               key={r.assetId}
-              className="border-b border-white/5 hover:bg-white/5 cursor-pointer"
+              className="border-b border-white/5 hover:bg-white/[0.04] cursor-pointer"
               onClick={() => onOpenMachine(r.assetId)}
             >
-              <td className="p-2 font-medium">{r.hostname}</td>
-              <td className="p-2"><StatusDot status={r.online ? "healthy" : "critical"} /></td>
-              <td className="p-2"><StatusDot status={r.emailStatus} /></td>
-              <td className="p-2"><StatusDot status={r.printerStatus} /></td>
-              <td className="p-2"><StatusDot status={r.enquestStatus} /></td>
-              <td className="p-2"><StatusDot status={r.endpointSecurityStatus} /></td>
-              <td className="p-2 tabular-nums">{r.ramUsage != null ? `${Math.round(r.ramUsage)}%` : "—"}</td>
-              <td className="p-2 tabular-nums">{r.diskFreePercent != null ? `${Math.round(r.diskFreePercent)}% free` : "—"}</td>
-              <td className="p-2"><StatusDot status={r.tightvncStatus === "running" ? "healthy" : "critical"} /></td>
+              <td className="px-4 py-2.5">
+                <div className="font-medium text-gray-100">{r.hostname}</div>
+                {r.openTicketCount > 0 && (
+                  <div className="text-[11px] text-warning">
+                    {r.openTicketCount} open ticket{r.openTicketCount === 1 ? "" : "s"}
+                  </div>
+                )}
+              </td>
+              <td className="px-3 py-2.5">
+                <StatusDot status={r.online ? r.status : "critical"} label={`${r.hostname}: ${r.online ? r.status : "offline"}`} />
+              </td>
+              <td className="px-3 py-2.5"><StatusDot status={r.online ? "healthy" : "critical"} label={r.online ? "online" : "offline"} /></td>
+              <td className="px-3 py-2.5"><StatusDot status={r.emailStatus} /></td>
+              <td className="px-3 py-2.5"><StatusDot status={r.printerStatus} /></td>
+              <td className="px-3 py-2.5"><StatusDot status={r.enquestStatus} /></td>
+              <td className="px-3 py-2.5"><StatusDot status={r.endpointSecurityStatus} /></td>
+              <td className={`px-3 py-2.5 tabular-nums ${ramClass(r.ramUsage)}`}>
+                {r.ramUsage != null ? `${Math.round(r.ramUsage)}%` : "—"}
+              </td>
+              <td className={`px-3 py-2.5 tabular-nums ${diskClass(r.diskFreePercent)}`}>
+                {r.diskFreePercent != null ? `${Math.round(r.diskFreePercent)}% free` : "—"}
+              </td>
+              <td className="px-3 py-2.5">
+                <StatusDot status={r.tightvncStatus === "running" ? "healthy" : "critical"} label={`VNC ${r.tightvncStatus}`} />
+              </td>
               {/* stopPropagation on the cell: every click inside the move
                   control would otherwise also open the machine workspace,
                   which slides over the very control being used. */}
-              <td className="p-2" onClick={(e) => e.stopPropagation()}>
+              <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
                 {movingId !== r.assetId ? (
                   <span className="flex items-center gap-2">
-                    {movedTo[r.assetId] && (
-                      <span className="text-xs text-gray-400">
-                        <span className="sr-only">{r.hostname} now belongs to </span>
-                        now at {movedTo[r.assetId]}
-                      </span>
-                    )}
+                    <span className="text-xs text-gray-400 truncate max-w-[9rem]" title={movedTo[r.assetId] ?? r.branchName}>
+                      {movedTo[r.assetId] ? (
+                        <>
+                          <span className="sr-only">{r.hostname} now belongs to </span>
+                          now at {movedTo[r.assetId]}
+                        </>
+                      ) : (
+                        r.branchName || "—"
+                      )}
+                    </span>
                     <button
                       type="button"
                       onClick={() => openMove(r)}
-                      className="text-xs px-2 py-1 rounded border border-white/15 text-gray-300 hover:bg-white/10"
+                      className="text-xs px-2 py-1 rounded-md border border-white/15 text-gray-300 hover:bg-white/10 shrink-0"
                     >
                       Move
                       <span className="sr-only"> {r.hostname} to a different branch</span>
