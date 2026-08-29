@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabase";
 import { SentinelMark } from "../../components/marketing/SiteHeader";
+import { ui } from "../../lib/theme";
+import { Button } from "../../components/ui/Button";
 
 /**
  * Supabase Auth email/password sign-in. MFA enrollment/challenge for
@@ -29,31 +31,28 @@ export default function LoginPage() {
       setError(signInError.message);
       return;
     }
-    // "/" is the public landing page now; the console is the post-sign-in destination.
     router.push("/console");
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-[#0b0f14]">
-      <div className="mx-auto flex w-full max-w-6xl items-center px-6 py-6 lg:px-8">
-        <Link href="/" className="flex items-center gap-2.5">
+    <div className={`flex min-h-screen flex-col ${ui.canvas}`}>
+      <div className={`${ui.page} flex items-center py-6`}>
+        <Link href="/" className="flex items-center gap-2">
           <SentinelMark />
-          <span className="text-sm font-semibold tracking-tight text-white">IT Sentinel</span>
+          <span className="text-[14px] font-medium text-obsidian">IT Sentinel</span>
         </Link>
       </div>
 
       <main className="flex flex-1 items-center justify-center px-6 pb-24">
         <form onSubmit={handleSubmit} className="w-full max-w-sm">
-          <p className="text-xs font-medium uppercase tracking-[0.18em] text-healthy-ink">
-            Sentinel Global
-          </p>
-          <h1 className="mt-3 text-2xl font-semibold tracking-tight text-white">Sign in</h1>
-          <p className="mt-2 text-sm text-muted">
+          <p className={ui.eyebrow}>Sentinel Global</p>
+          <h1 className={`mt-3 ${ui.headingSm}`}>Sign in</h1>
+          <p className={`mt-2 ${ui.muted}`}>
             An operator sees exactly what their site access grants. Nothing else loads.
           </p>
 
-          <div className="mt-8 rounded-xl border border-white/[0.09] bg-white/[0.02] p-6">
-            <label htmlFor="email" className="block text-xs font-medium text-gray-400">
+          <div className={`mt-8 ${ui.card}`}>
+            <label htmlFor="email" className={ui.caption}>
               Email
             </label>
             <input
@@ -62,11 +61,11 @@ export default function LoginPage() {
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="mb-4 mt-1.5 w-full rounded-md border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-muted"
+              className={`${ui.input} mb-4 mt-1.5 border-cloud`}
               autoComplete="username"
             />
 
-            <label htmlFor="password" className="block text-xs font-medium text-gray-400">
+            <label htmlFor="password" className={ui.caption}>
               Password
             </label>
             <input
@@ -75,31 +74,23 @@ export default function LoginPage() {
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="mb-5 mt-1.5 w-full rounded-md border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-muted"
+              className={`${ui.input} mb-5 mt-1.5 border-cloud`}
               autoComplete="current-password"
             />
 
-            {/*
-              role="alert" so a screen reader hears a rejected sign-in; the
-              message is otherwise only distinguishable by its colour.
-            */}
             {error && (
-              <div role="alert" className="mb-4 text-xs leading-5 text-critical-ink">
+              <div role="alert" className={`mb-4 ${ui.caption} text-iron`}>
                 {error}
               </div>
             )}
 
-            <button
-              type="submit"
-              disabled={submitting}
-              className="w-full rounded-md bg-healthy py-2.5 text-sm font-semibold text-black transition-colors hover:bg-healthy-ink disabled:opacity-50"
-            >
+            <Button type="submit" disabled={submitting} className="w-full">
               {submitting ? "Signing in…" : "Sign in"}
-            </button>
+            </Button>
           </div>
 
-          <p className="mt-6 text-xs text-muted">
-            <Link href="/" className="underline underline-offset-4 hover:text-gray-300">
+          <p className={`mt-6 ${ui.caption}`}>
+            <Link href="/" className="underline underline-offset-4 hover:text-obsidian">
               Back to the overview
             </Link>
           </p>

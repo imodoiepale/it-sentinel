@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../../lib/useAuth";
+import { ui } from "../../lib/theme";
+import { Button } from "../../components/ui/Button";
 
 /**
  * Self-service enrollment.
@@ -167,31 +169,32 @@ export default function EnrollPage() {
 
   if (authLoading || !session) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#0b0f14] text-gray-500 text-sm">
+      <div className={`flex min-h-screen items-center justify-center ${ui.canvas} ${ui.muted}`}>
         Loading…
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#0b0f14]">
-      <header className="p-4 border-b border-white/10 flex items-center justify-between">
-        <div>
-          <div className="text-xs uppercase tracking-wide text-gray-400">Sentinel Global</div>
-          <h1 className="text-lg font-semibold">Enroll a machine</h1>
+    <div className={`min-h-screen ${ui.canvas}`}>
+      <header className="border-b border-cloud bg-snow">
+        <div className={`${ui.page} flex items-center justify-between py-6`}>
+          <div>
+            <div className={ui.eyebrow}>Sentinel Global</div>
+            <h1 className={`mt-1 ${ui.subheading}`}>Enroll a machine</h1>
+          </div>
+          <a href="/console" className={ui.navLink}>
+            Back to Command Center
+          </a>
         </div>
-        <a href="/console" className="text-xs text-gray-500 hover:text-white">
-          Back to Command Center
-        </a>
       </header>
 
-      <main className="max-w-3xl mx-auto px-4 py-8 space-y-10">
-        {/* ------------------------------------------------ 1. branch --- */}
+      <main className="mx-auto max-w-3xl space-y-10 px-6 py-section">
         <section aria-labelledby="step-branch">
-          <h2 id="step-branch" className="text-sm font-semibold mb-1">
-            <span className="text-gray-500 mr-2">1.</span>Which branch is this laptop?
+          <h2 id="step-branch" className={`${ui.subheading} mb-1`}>
+            <span className="mr-2 text-fog">1.</span>Which branch is this laptop?
           </h2>
-          <p className="text-xs text-gray-500 mb-4">
+          <p className={`${ui.caption} mb-4`}>
             This is the branch the machine reports into. Pick the wrong one and it shows up in
             somebody else&apos;s fleet — re-run the installer to change it.
           </p>
@@ -206,32 +209,26 @@ export default function EnrollPage() {
                   role="radio"
                   aria-checked={isSelected}
                   onClick={() => setSelected(branch.slug)}
-                  className={`flex items-start gap-3 text-left px-3 py-2.5 rounded border text-sm transition-colors ${
+                  className={`flex items-start gap-3 rounded-buttons border px-3 py-2.5 text-left text-[14px] transition-opacity duration-200 ${
                     isSelected
-                      ? "border-healthy-ink bg-healthy/10"
-                      : "border-white/10 bg-white/5 hover:bg-white/10"
+                      ? "border-obsidian bg-snow"
+                      : "border-cloud bg-quiet hover:opacity-80"
                   }`}
                 >
-                  {/*
-                    A drawn mark, not a colour change. Selection has to survive
-                    a monochrome screen and a colour-blind reader, which the
-                    tinted border alone would not — same rule StatusDot.tsx
-                    follows for status.
-                  */}
                   <span
                     aria-hidden
-                    className={`mt-0.5 h-4 w-4 shrink-0 rounded-full border grid place-items-center text-[10px] leading-none ${
-                      isSelected ? "border-healthy-ink text-healthy-ink" : "border-white/25 text-transparent"
+                    className={`mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded-full border text-[10px] leading-none ${
+                      isSelected ? "border-obsidian text-obsidian" : "border-mist text-transparent"
                     }`}
                   >
                     ✓
                   </span>
                   <span>
-                    <span className="block">
+                    <span className="block text-obsidian">
                       {branch.name}
                       {isSelected && <span className="sr-only"> (selected)</span>}
                     </span>
-                    <span className="block text-xs text-gray-500 font-mono">
+                    <span className="block font-mono text-[12px] text-fog">
                       {branch.slug}
                       {branch.region ? ` · ${branch.region}` : ""}
                     </span>
@@ -242,17 +239,16 @@ export default function EnrollPage() {
           </div>
         </section>
 
-        {/* ----------------------------------------------- 2. command --- */}
         <section aria-labelledby="step-command">
-          <h2 id="step-command" className="text-sm font-semibold mb-1">
-            <span className="text-gray-500 mr-2">2.</span>Run this in Windows PowerShell
+          <h2 id="step-command" className={`${ui.subheading} mb-1`}>
+            <span className="mr-2 text-fog">2.</span>Run this in Windows PowerShell
           </h2>
-          <p className="text-xs text-gray-500 mb-4">
+          <p className={`${ui.caption} mb-4`}>
             {selected ? (
               <>
                 Open PowerShell on the laptop (no need to Run as administrator — it asks when it
                 needs to) and paste this. It is filled in for{" "}
-                <span className="text-gray-300 font-mono">{selected}</span>.
+                <span className="font-mono text-graphite">{selected}</span>.
               </>
             ) : (
               <>
@@ -262,26 +258,18 @@ export default function EnrollPage() {
             )}
           </p>
 
-          <div className="rounded border border-white/10 bg-black/40">
-            <pre className="p-3 text-xs font-mono text-gray-200 overflow-x-auto whitespace-pre-wrap break-all">
+          <div className="overflow-hidden rounded-cards border border-cloud bg-snow">
+            <pre className="overflow-x-auto whitespace-pre-wrap break-all p-card font-mono text-[12px] text-graphite">
               {command}
             </pre>
-            <div className="flex items-center gap-3 px-3 py-2 border-t border-white/10">
-              <button
-                type="button"
-                onClick={copy}
-                className="px-3 py-1.5 rounded bg-healthy/90 hover:bg-healthy text-black text-xs font-medium"
-              >
+            <div className="flex items-center gap-3 border-t border-cloud px-card py-3">
+              <Button type="button" onClick={copy}>
                 Copy command
-              </button>
-              {/*
-                aria-live so a screen-reader user is told the copy happened.
-                The visible confirmation is a word, not a colour change.
-              */}
-              <span aria-live="polite" className="text-xs">
-                {copied && <span className="text-healthy-ink">Copied to clipboard</span>}
+              </Button>
+              <span aria-live="polite" className={ui.caption}>
+                {copied && <span className="text-obsidian">Copied to clipboard</span>}
                 {copyFailed && (
-                  <span className="text-warning">
+                  <span>
                     This browser blocked the clipboard — select the command above and copy it.
                   </span>
                 )}
@@ -289,28 +277,27 @@ export default function EnrollPage() {
             </div>
           </div>
 
-          <p className="text-xs text-gray-500 mt-3">
+          <p className={`${ui.caption} mt-3`}>
             Takes about ten minutes on a fresh laptop, most of it downloads. It asks for
             administrator once, and will not change anything until you type{" "}
-            <span className="font-mono text-gray-300">INSTALL</span>. When it finishes, the machine
+            <span className="font-mono text-graphite">INSTALL</span>. When it finishes, the machine
             appears in the Command Center within a minute.
           </p>
         </section>
 
-        {/* ------------------------------------------ 3. what it does --- */}
         <section aria-labelledby="step-disclosure">
-          <h2 id="step-disclosure" className="text-sm font-semibold mb-1">
-            <span className="text-gray-500 mr-2">3.</span>What this installs, and what it can do
+          <h2 id="step-disclosure" className={`${ui.subheading} mb-1`}>
+            <span className="mr-2 text-fog">3.</span>What this installs, and what it can do
           </h2>
-          <p className="text-xs text-gray-500 mb-4">
+          <p className={`${ui.caption} mb-4`}>
             The short version. The installer itself shows the full disclosure on screen before it
             touches anything, and that is the authoritative one — read it there.
           </p>
 
           <div className="grid gap-3 sm:grid-cols-2">
-            <div className="rounded border border-white/10 bg-white/5 p-3">
-              <h3 className="text-xs font-semibold mb-2">It installs</h3>
-              <ul className="text-xs text-gray-400 space-y-1 list-disc list-inside">
+            <div className={ui.card}>
+              <h3 className="mb-2 text-[14px] font-medium text-obsidian">It installs</h3>
+              <ul className="list-inside list-disc space-y-1 text-[13px] text-steel">
                 <li>Node.js, PowerShell 7 and Git (to run the agent)</li>
                 <li>Google Chrome</li>
                 <li>TightVNC server, for remote desktop</li>
@@ -318,9 +305,9 @@ export default function EnrollPage() {
               </ul>
             </div>
 
-            <div className="rounded border border-white/10 bg-white/5 p-3">
-              <h3 className="text-xs font-semibold mb-2">It changes</h3>
-              <ul className="text-xs text-gray-400 space-y-1 list-disc list-inside">
+            <div className={ui.card}>
+              <h3 className="mb-2 text-[14px] font-medium text-obsidian">It changes</h3>
+              <ul className="list-inside list-disc space-y-1 text-[13px] text-steel">
                 <li>Opens TCP port 5900 inbound on the Windows firewall</li>
                 <li>Writes the hub URL and branch to a local .env file</li>
                 <li>Starts sending a heartbeat to the hub every minute</li>
@@ -328,17 +315,12 @@ export default function EnrollPage() {
             </div>
           </div>
 
-          {/*
-            The one thing on this page somebody might not expect, so it is
-            said plainly and not buried in the list above. Border plus a
-            heading, never colour alone, so it reads the same in monochrome.
-          */}
-          <div className="mt-3 rounded border border-warning/60 bg-warning/10 p-3">
-            <h3 className="text-xs font-semibold mb-1 text-warning">
+          <div className={`mt-3 ${ui.cardDark}`}>
+            <h3 className="mb-1 text-[14px] font-medium text-snow">
               <span className="sr-only">Important: </span>An operator can watch and control this
               desktop
             </h3>
-            <p className="text-xs text-gray-300">
+            <p className="text-[13px] leading-[1.64] text-mist">
               Once TightVNC is running, an operator in the Command Center can view the screen and
               take over the mouse and keyboard, and can run remediation scripts on the machine.
               Every session and every command is written to the audit log with the operator&apos;s
@@ -347,18 +329,17 @@ export default function EnrollPage() {
             </p>
           </div>
 
-          <p className="text-xs text-gray-500 mt-3">
+          <p className={`${ui.caption} mt-3`}>
             Changed your mind later? Download the uninstaller below and run it. It removes all of
             the above except the applications, which are yours to keep or remove.
           </p>
         </section>
 
-        {/* --------------------------------------------- 4. downloads --- */}
         <section aria-labelledby="step-downloads">
-          <h2 id="step-downloads" className="text-sm font-semibold mb-1">
-            <span className="text-gray-500 mr-2">4.</span>The scripts themselves
+          <h2 id="step-downloads" className={`${ui.subheading} mb-1`}>
+            <span className="mr-2 text-fog">4.</span>The scripts themselves
           </h2>
-          <p className="text-xs text-gray-500 mb-4">
+          <p className={`${ui.caption} mb-4`}>
             Served by the control plane, so they always match the deployed version. Read any of
             them before you run it — that is why they are here.
           </p>
@@ -368,21 +349,21 @@ export default function EnrollPage() {
               <li key={item.file}>
                 <a
                   href={`${CONTROL_PLANE}/v1/enroll/${item.file}`}
-                  className="flex items-baseline justify-between gap-4 px-3 py-2.5 rounded border border-white/10 bg-white/5 hover:bg-white/10"
+                  className="flex items-baseline justify-between gap-4 rounded-cards border border-cloud bg-snow px-card py-3 hover:bg-quiet"
                 >
                   <span>
-                    <span className="block text-sm">{item.title}</span>
-                    <span className="block text-xs text-gray-500">{item.blurb}</span>
+                    <span className="block text-[14px] text-obsidian">{item.title}</span>
+                    <span className="block text-[12px] text-fog">{item.blurb}</span>
                   </span>
-                  <span className="text-xs font-mono text-healthy-ink shrink-0">{item.file}</span>
+                  <span className="shrink-0 font-mono text-[12px] text-steel">{item.file}</span>
                 </a>
               </li>
             ))}
           </ul>
 
-          <p className="text-xs text-gray-500 mt-3">
+          <p className={`${ui.caption} mt-3`}>
             Enrolling a machine that cannot reach github.com? The bootstrap script falls back to{" "}
-            <span className="font-mono text-gray-400">{CONTROL_PLANE}/v1/enroll/repo.zip</span>{" "}
+            <span className="font-mono text-steel">{CONTROL_PLANE}/v1/enroll/repo.zip</span>{" "}
             automatically, so the same command still works.
           </p>
         </section>

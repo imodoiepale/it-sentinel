@@ -3,40 +3,167 @@
 @tailwind utilities;
 
 :root {
-  color-scheme: dark;
+  color-scheme: light;
 
-  /*
-    A system stack rather than next/font: the landing page is the first
-    thing a judge sees on a cold Render dyno, and a webfont is one more
-    blocking round-trip before the headline paints. Nothing here needs a
-    typeface the OS does not already have.
-  */
-  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
-    "Helvetica Neue", Arial, sans-serif;
-  --font-mono: ui-monospace, "Cascadia Mono", "Segoe UI Mono", "SF Mono",
-    Menlo, Consolas, monospace;
+  --color-obsidian: #09090b;
+  --color-graphite: #18181b;
+  --color-slate: #27272a;
+  --color-iron: #3f3f46;
+  --color-steel: #52525b;
+  --color-fog: #71717a;
+  --color-ash: #a1a1aa;
+  --color-mist: #d4d4d8;
+  --color-cloud: #ececee;
+  --color-paper: #f4f4f5;
+  --color-snow: #ffffff;
+  --color-ember: #ff5a00;
+  --color-magenta-spark: #fe45e2;
+
+  --font-mono: ui-monospace, "Cascadia Mono", "Segoe UI Mono", "SF Mono", Menlo,
+    Consolas, monospace;
+
+  --text-caption: 12px;
+  --leading-caption: 1.64;
+  --text-body: 15px;
+  --leading-body: 1.45;
+  --text-body-lg: 18px;
+  --leading-body-lg: 1.45;
+  --text-subheading: 20px;
+  --leading-subheading: 1.5;
+  --text-heading-sm: 32px;
+  --leading-heading-sm: 1.25;
+  --text-heading: 40px;
+  --leading-heading: 1.2;
+  --text-heading-lg: 56px;
+  --leading-heading-lg: 1.15;
+  --text-display: 80px;
+  --leading-display: 1.02;
+
+  --spacing-unit: 4px;
+  --page-max-width: 1200px;
+  --section-gap: 80px;
+  --card-padding: 28px;
+  --element-gap: 8px;
+
+  --radius-cards: 36px;
+  --radius-icons: 40px;
+  --radius-pills: 10000px;
+  --radius-badges: 12px;
+  --radius-inputs: 14px;
+  --radius-buttons: 14px;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+
+  --surface-canvas: var(--color-paper);
+  --surface-card: var(--color-snow);
+  --surface-subtle-card: #fafafa;
+  --surface-dark-surface: var(--color-graphite);
+  --surface-deep-dark: var(--color-slate);
 }
 
 body {
-  background: #0b0f14;
-  color: #e5e7eb;
-  font-family: var(--font-sans);
+  background: var(--color-paper);
+  color: var(--color-graphite);
+  font-family: var(--font-cosmica);
+  font-size: var(--text-body);
+  line-height: var(--leading-body);
   -webkit-font-smoothing: antialiased;
 }
 
-/*
-  One focus treatment for the whole app. The console leans on colour to carry
-  status, so keyboard focus has to be unmistakable and never colour-only —
-  a solid ring plus an offset that reads against both the page ground and the
-  lighter panel fills.
-*/
-:where(a, button, input, [tabindex]):focus-visible {
-  outline: 2px solid #2dd4bf;
-  outline-offset: 2px;
-  border-radius: 2px;
+/* Button motion uses --ease-out; token utilities come from tailwind.config.ts. */
+
+@layer components {
+  .ui-button {
+    display: inline-flex;
+    height: 3rem;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    border-radius: 9999px;
+    padding: 0 1.25rem;
+    font-size: 1rem;
+    line-height: 1.5;
+    font-weight: 500;
+    text-decoration: none;
+    transition-property: color, background-color, border-color, transform;
+    transition-duration: 200ms;
+    transition-timing-function: var(--ease-out);
+  }
+
+  .ui-button:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--color-paper), 0 0 0 4px rgb(9 9 11 / 0.6);
+  }
+
+  .ui-button:disabled {
+    pointer-events: none;
+    opacity: 0.5;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .ui-button:active {
+      transform: scale(0.97);
+      transition-duration: 160ms;
+    }
+  }
+
+  .ui-button-primary {
+    border: 1px solid transparent;
+    background: var(--color-obsidian);
+    color: var(--color-snow);
+  }
+
+  .ui-button-primary:hover {
+    background: #383838;
+  }
+
+  .ui-button-secondary {
+    border: 1px solid rgb(0 0 0 / 0.08);
+    background: transparent;
+    color: var(--color-obsidian);
+  }
+
+  .ui-button-secondary:hover {
+    border-color: transparent;
+    background: var(--surface-subtle-card);
+  }
+
+  .ui-button-ghost {
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--color-obsidian);
+  }
+
+  .ui-button-ghost:hover {
+    background: var(--surface-subtle-card);
+  }
+
+  .ui-button-destructive {
+    border: 1px solid #dc2626;
+    background: transparent;
+    color: #dc2626;
+  }
+
+  .ui-button-destructive:hover {
+    background: #dc2626;
+    color: var(--color-snow);
+    border-color: #dc2626;
+  }
+
+  .ui-button-destructive:focus-visible {
+    box-shadow: 0 0 0 2px var(--color-paper), 0 0 0 4px rgb(220 38 38 / 0.5);
+  }
 }
 
-/* Anchor navigation must not drop a heading underneath the sticky header. */
+img {
+  max-width: 100%;
+}
+
+:where(a, button, input, [tabindex]):focus-visible:not(.ui-button) {
+  outline: 2px solid var(--color-obsidian);
+  outline-offset: 2px;
+  border-radius: var(--radius-badges);
+}
+
 :where(section[id]) {
   scroll-margin-top: 5rem;
 }

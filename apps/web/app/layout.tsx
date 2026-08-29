@@ -1,11 +1,16 @@
 import type { Metadata, Viewport } from "next";
+import { DM_Sans } from "next/font/google";
+import { colors } from "../lib/theme";
 import "./globals.css";
 
+const cosmica = DM_Sans({
+  subsets: ["latin"],
+  weight: ["300", "400", "500", "600", "700"],
+  variable: "--font-cosmica",
+  display: "swap",
+});
+
 export const metadata: Metadata = {
-  /*
-   * `default` rather than a bare string so the landing page can set its own
-   * title without every console screen having to restate the product name.
-   */
   title: {
     default: "IT Sentinel - Sentinel Global Command",
     template: "%s",
@@ -13,20 +18,15 @@ export const metadata: Metadata = {
   description: "Global IT operations command center",
 };
 
-/*
- * The page ground is set here as well as in globals.css so the browser paints
- * the right colour in the chrome around the viewport (address bar, overscroll)
- * instead of flashing white before the stylesheet lands.
- */
 export const viewport: Viewport = {
-  themeColor: "#0b0f14",
-  colorScheme: "dark",
+  themeColor: colors.paper,
+  colorScheme: "light",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
-      <body>{children}</body>
+    <html lang="en" className={cosmica.variable}>
+      <body className={cosmica.className}>{children}</body>
     </html>
   );
 }
