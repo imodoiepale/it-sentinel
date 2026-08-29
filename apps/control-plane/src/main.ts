@@ -11,6 +11,7 @@ import { sendDailyDigest } from "./notify/whatsapp.service.js";
 import { startDailyDigestScheduler } from "./notify/scheduler.js";
 import { registerVoiceRoutes } from "./voice/voice.routes.js";
 import { registerAuthRoutes } from "./auth/reauth.routes.js";
+import { registerEnrollRoutes } from "./enroll/enroll.routes.js";
 import { runWithElevationToken } from "./auth/elevation.context.js";
 import { elevationReference } from "./auth/elevation.store.js";
 import { CommandResult, SessionRequest } from "@it-sentinel/contracts";
@@ -44,6 +45,11 @@ registerVoiceRoutes(app);
 // Operator password re-authentication, the gate in front of T4 — see
 // auth/reauth.routes.ts. Nothing else in this process can mint an elevation.
 registerAuthRoutes(app);
+
+// Self-service enrollment: the bootstrap one-liner, the .ps1 library and the
+// repo archive a fresh laptop needs. Served from here because the GitHub repo
+// is private and a teammate's laptop cannot clone it — see enroll.routes.ts.
+registerEnrollRoutes(app);
 
 /**
  * Every collector posts here. 400 on a contract violation (never silently

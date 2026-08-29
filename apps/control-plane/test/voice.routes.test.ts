@@ -27,6 +27,15 @@ const state = vi.hoisted(() => ({
   retireCalls: [] as any[],
   retireResult: { already_retired: false } as any,
   retireError: null as any,
+  /**
+   * Per-query branch matches. /v1/voice/reassign resolves TWO branch names in
+   * one turn, so a single shared answer would make every move a move to the
+   * branch it started at — the one case the route short-circuits.
+   */
+  branchMatchesByQuery: {} as Record<string, any[]>,
+  reassignCalls: [] as any[],
+  reassignResult: { already_there: false, to_site_name: "Dubai", alerts_moved: 0 } as any,
+  reassignError: null as any,
 }));
 
 vi.mock("../src/db.js", () => {
@@ -60,11 +69,18 @@ vi.mock("../src/db.js", () => {
     db: {
       from: (name: string) => table(name),
       rpc: async (fn: string, params?: any) => {
-        if (fn === "resolve_branch_by_voice") return { data: state.branchMatches, error: null };
+        if (fn === "resolve_branch_by_voice") {
+          return { data: state.branchMatchesByQuery[params?.p_query] ?? state.branchMatches, error: null };
+        }
         if (fn === "retire_asset") {
           state.retireCalls.push(params);
           if (state.retireError) return { data: null, error: state.retireError };
           return { data: [state.retireResult], error: null };
+        }
+        if (fn === "reassign_asset") {
+          state.reassignCalls.push(params);
+          if (state.reassignError) return { data: null, error: state.reassignError };
+          return { data: [state.reassignResult], error: null };
         }
         return { data: null, error: null };
       },
@@ -177,6 +193,10 @@ beforeEach(() => {
   state.retireCalls = [];
   state.retireResult = { already_retired: false };
   state.retireError = null;
+  state.branchMatchesByQuery = {};
+  state.reassignCalls = [];
+  state.reassignResult = { already_there: false, to_site_name: "Dubai", alerts_moved: 0 };
+  state.reassignError = null;
 });
 
 const ACTION_ROUTES = [
@@ -939,5 +959,127 @@ describe("retiring a machine is two-step, and never guesses which one", () => {
     const res = await call("/v1/voice/retire", { branch: "Lagos", confirm: true }, "wrong");
     expect(res.statusCode).toBe(401);
     expect(state.retireCalls).toHaveLength(0);
+  });
+});
+
+describe("moving a machine to another branch is two-step, and resolves both ends", () => {
+  /** Lagos and Dubai as two distinct branches, keyed by what is spoken. */
+  function twoBranches() {
+    state.branchMatchesByQuery = {
+      Lagos: [{ site_id: "site-1", name: "Lagos", slug: "lagos", similarity: 0.95 }],
+      Dubai: [{ site_id: "site-2", name: "Dubai", slug: "dubai", similarity: 0.95 }],
+    };
+  }
+
+  beforeEach(twoBranches);
+
+  it("asks for confirmation instead of moving on the first turn", async () => {
+    const res = await call("/v1/voice/reassign", { branch: "Lagos", toBranch: "Dubai" });
+    expect(res.json().requiresConfirmation).toBe(true);
+    // Both ends named in the prompt: mishearing one branch name is the whole
+    // risk this second turn exists to catch.
+    expect(res.json().speech).toContain("Lagos");
+    expect(res.json().speech).toContain("Dubai");
+    expect(state.reassignCalls).toHaveLength(0);
+  });
+
+  it("moves only once confirm is explicitly true, and passes both ids", async () => {
+    const res = await call("/v1/voice/reassign", { branch: "Lagos", toBranch: "Dubai", confirm: true });
+    expect(state.reassignCalls).toHaveLength(1);
+    expect(state.reassignCalls[0]).toMatchObject({ p_asset_id: "asset-1", p_site_id: "site-2", p_actor_id: "operator-1" });
+    expect(res.json().reassigned).toBe(true);
+  });
+
+  it("says the agent's config is now stale, because nothing else will", async () => {
+    const res = await call("/v1/voice/reassign", { branch: "Lagos", toBranch: "Dubai", confirm: true });
+    expect(res.json().speech).toContain("SENTINEL_BRANCH_SLUG");
+  });
+
+  it("mentions the open alerts that travelled with the machine", async () => {
+    state.reassignResult = { already_there: false, to_site_name: "Dubai", alerts_moved: 2 };
+    const res = await call("/v1/voice/reassign", { branch: "Lagos", toBranch: "Dubai", confirm: true });
+    expect(res.json().alertsMoved).toBe(2);
+    expect(res.json().speech).toMatch(/2 open alerts moved/);
+  });
+
+  it("asks which branch when none was given, rather than guessing one", async () => {
+    const res = await call("/v1/voice/reassign", { branch: "Lagos" });
+    expect(res.json().speech).toMatch(/which branch/i);
+    expect(state.reassignCalls).toHaveLength(0);
+  });
+
+  it("refuses to pick when the branch has several machines and none is named", async () => {
+    state.assets = [
+      { id: "a1", hostname: "LAGOS-POS-01", site_id: "site-1" },
+      { id: "a2", hostname: "LAGOS-POS-02", site_id: "site-1" },
+    ];
+    const res = await call("/v1/voice/reassign", { branch: "Lagos", toBranch: "Dubai", confirm: true });
+    expect(res.json().status).toBe(409);
+    expect(state.reassignCalls).toHaveLength(0);
+  });
+
+  it("refuses when a hostname hint matches more than one machine", async () => {
+    state.assets = [
+      { id: "a1", hostname: "LAGOS-POS-01", site_id: "site-1" },
+      { id: "a2", hostname: "LAGOS-POS-02", site_id: "site-1" },
+    ];
+    const res = await call("/v1/voice/reassign", { branch: "Lagos", toBranch: "Dubai", hostname: "LAGOS-POS", confirm: true });
+    expect(res.json().status).toBe(409);
+    expect(state.reassignCalls).toHaveLength(0);
+  });
+
+  it("targets the named machine when the hint is unambiguous", async () => {
+    state.assets = [
+      { id: "a1", hostname: "LAGOS-POS-01", site_id: "site-1" },
+      { id: "a2", hostname: "LAGOS-TILL-09", site_id: "site-1" },
+    ];
+    await call("/v1/voice/reassign", { branch: "Lagos", toBranch: "Dubai", hostname: "TILL", confirm: true });
+    expect(state.reassignCalls[0]).toMatchObject({ p_asset_id: "a2" });
+  });
+
+  it("asks about an ambiguous destination rather than moving to a coin-flip", async () => {
+    state.branchMatchesByQuery.Nyali = [
+      { site_id: "s1", name: "Nyali A", slug: "nyali-a", similarity: 0.81 },
+      { site_id: "s2", name: "Nyali B", slug: "nyali-b", similarity: 0.79 },
+    ];
+    const res = await call("/v1/voice/reassign", { branch: "Lagos", toBranch: "Nyali", confirm: true });
+    expect(res.json().status).toBe(409);
+    expect(state.reassignCalls).toHaveLength(0);
+  });
+
+  it("says a machine is already there without asking to confirm a no-op", async () => {
+    const res = await call("/v1/voice/reassign", { branch: "Lagos", toBranch: "Lagos" });
+    expect(res.json().alreadyThere).toBe(true);
+    expect(res.json().requiresConfirmation).toBeUndefined();
+    expect(state.reassignCalls).toHaveLength(0);
+  });
+
+  it("reports the function's own idempotent answer plainly", async () => {
+    state.reassignResult = { already_there: true, to_site_name: "Dubai", alerts_moved: 0 };
+    const res = await call("/v1/voice/reassign", { branch: "Lagos", toBranch: "Dubai", confirm: true });
+    expect(res.json().alreadyThere).toBe(true);
+    expect(res.json().reassigned).toBeUndefined();
+  });
+
+  it("surfaces the two-ended role check as a spoken refusal naming both branches", async () => {
+    state.reassignError = { code: "42501", message: "operator may not move assets out of site" };
+    const res = await call("/v1/voice/reassign", { branch: "Lagos", toBranch: "Dubai", confirm: true });
+    expect(res.json().status).toBe(403);
+    expect(res.json().speech).toContain("Lagos");
+    expect(res.json().speech).toContain("Dubai");
+  });
+
+  it("explains a hostname collision as a situation, not as a constraint violation", async () => {
+    state.reassignError = { code: "23505", message: "Dubai already has a machine called LAGOS-POS-01" };
+    const res = await call("/v1/voice/reassign", { branch: "Lagos", toBranch: "Dubai", confirm: true });
+    expect(res.json().status).toBe(409);
+    expect(res.json().speech).toContain("LAGOS-POS-01");
+    expect(res.json().speech).not.toMatch(/constraint|23505/);
+  });
+
+  it("is gated by the shared secret like every other route", async () => {
+    const res = await call("/v1/voice/reassign", { branch: "Lagos", toBranch: "Dubai", confirm: true }, "wrong");
+    expect(res.statusCode).toBe(401);
+    expect(state.reassignCalls).toHaveLength(0);
   });
 });

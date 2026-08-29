@@ -32,6 +32,32 @@ export class AssetRetiredError extends Error {
   }
 }
 
+/**
+ * Was this asset moved to its current branch by an operator?
+ *
+ * The audit row is the evidence, not a convenience: reassign_asset() writes
+ * one on every real move, and it is the only thing that can change an asset's
+ * site_id (there is no update policy on `assets`, by design — see migration
+ * 0028). So "has a reassignment row" and "an operator deliberately put this
+ * machine where it is" are the same statement, which is precisely the
+ * question the hostname lookup needs answered before it adopts a row that
+ * sits at a branch the agent did not claim.
+ *
+ * Only reached when the claimed branch and the roster disagree, which is rare
+ * — it costs nothing on the normal heartbeat path.
+ */
+async function wasReassigned(assetId: string): Promise<boolean> {
+  const { data, error } = await db
+    .from("audit_log")
+    .select("id")
+    .eq("target_id", assetId)
+    .eq("action", "asset.reassigned")
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  return Boolean(data);
+}
+
 function deriveHealthStatus(hb: HeartbeatPayload): "healthy" | "warning" | "critical" {
   const substatuses = [hb.printer, hb.email, hb.endpointSecurity, hb.enquest];
   if (substatuses.includes("critical") || !hb.online) return "critical";
@@ -46,13 +72,10 @@ export async function ingestHeartbeat(raw: unknown) {
   }
   const hb = parsed.data;
 
-  // Resolve the branch first, then look the asset up WITHIN it. The assets
-  // table declares `unique (site_id, hostname)` — hostnames are only unique
-  // per site — but this lookup used to match on hostname alone. Two machines
-  // sharing a hostname (routine with cloned Windows images) would then
-  // collapse onto a single asset row: the second machine's heartbeats would
-  // overwrite the first's health, and one branch would render empty with no
-  // error anywhere.
+  // The branch the agent CLAIMS, from SENTINEL_BRANCH_SLUG in its .env. An
+  // unknown slug still fails hard below, because that is a real config error
+  // rather than a new machine — but from here on it is a claim to be checked
+  // against the roster, not the last word on where the machine lives.
   const { data: site, error: siteError } = await db
     .from("sites")
     .select("id")
@@ -61,14 +84,69 @@ export async function ingestHeartbeat(raw: unknown) {
   if (siteError) throw siteError;
   if (!site) throw new UnknownAssetError(hb.hostname, hb.machine.branchSlug);
 
-  const { data: existingAsset, error: assetLookupError } = await db
+  // Two requirements pull this lookup in opposite directions, and both are
+  // real.
+  //
+  //  (a) It must NOT match on hostname alone. `assets` declares
+  //      `unique (site_id, hostname)` — hostnames are unique per site, not
+  //      per fleet — and matching fleet-wide once meant two machines sharing
+  //      a hostname (routine with cloned Windows images) collapsed onto a
+  //      single row: the second machine's heartbeats overwrote the first's
+  //      health and one branch rendered empty with no error anywhere.
+  //
+  //  (b) It must NOT be scoped to the claimed site either. reassign_asset()
+  //      (migration 0028) lets an operator move a machine to another branch,
+  //      and the agent on that machine keeps sending the OLD slug until
+  //      somebody edits its .env. A site-scoped lookup finds nothing, falls
+  //      through to auto-provision, and quietly creates a SECOND asset — so
+  //      the operator's correction produces exactly the duplicate they were
+  //      trying to avoid, and the machine appears at two branches at once.
+  //
+  // Both are satisfied by asking a narrower question than "which asset has
+  // this hostname": match within the claimed site FIRST, which is the common
+  // case and keeps (a) exactly as it was, and only look further when there is
+  // no match there. A row found at a different site is adopted only if an
+  // operator actually moved it — proven by its own reassignment audit row,
+  // which is the only way site_id can change (no update policy on assets
+  // exists). That distinction is what keeps (a) intact: a genuinely new
+  // machine that happens to share a hostname with one at another branch has
+  // no such row, so it is provisioned here as its own asset, as before.
+  const { data: sameHostname, error: assetLookupError } = await db
     .from("assets")
     .select("id, site_id, decommissioned_at")
-    .eq("hostname", hb.hostname)
-    .eq("site_id", site.id)
-    .maybeSingle();
+    .eq("hostname", hb.hostname);
   if (assetLookupError) throw assetLookupError;
 
+  const candidates = (sameHostname ?? []) as {
+    id: string;
+    site_id: string;
+    decommissioned_at: string | null;
+  }[];
+  let existingAsset = candidates.find((a) => a.site_id === site.id) ?? null;
+
+  if (!existingAsset) {
+    // Only one, deliberately. If several branches hold this hostname the
+    // fleet cannot tell which of them the heartbeat belongs to, and guessing
+    // would rewrite a machine that is reporting perfectly well elsewhere —
+    // so that case falls through to provisioning at the claimed site, which
+    // is the honest answer and the one the unique constraint allows.
+    const moved = candidates.length === 1 ? candidates[0]! : null;
+    if (moved && (await wasReassigned(moved.id))) {
+      // The roster wins over the .env, and says so out loud. This is not
+      // noise: it is the one signal that a machine's SENTINEL_BRANCH_SLUG is
+      // stale, and nothing else in the system can see it — the agent has no
+      // idea it was moved and the operator who moved it never touched the
+      // machine.
+      console.warn(
+        `[ingest] ${hb.hostname} claims branch '${hb.machine.branchSlug}' but the roster has it at site ${moved.site_id} (reassigned by an operator). Keeping the roster's branch; update SENTINEL_BRANCH_SLUG on that machine.`,
+      );
+      existingAsset = moved;
+    }
+  }
+
+  // site_id comes from the ASSET, never from the claimed slug, so everything
+  // downstream — alerts, checks, the branch a fault renders under — follows
+  // the reassignment rather than the stale .env.
   let asset: { id: string; site_id: string } | null = existingAsset
     ? { id: existingAsset.id, site_id: existingAsset.site_id }
     : null;

@@ -4,9 +4,49 @@
 
 :root {
   color-scheme: dark;
+
+  /*
+    A system stack rather than next/font: the landing page is the first
+    thing a judge sees on a cold Render dyno, and a webfont is one more
+    blocking round-trip before the headline paints. Nothing here needs a
+    typeface the OS does not already have.
+  */
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, "Cascadia Mono", "Segoe UI Mono", "SF Mono",
+    Menlo, Consolas, monospace;
 }
 
 body {
   background: #0b0f14;
   color: #e5e7eb;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/*
+  One focus treatment for the whole app. The console leans on colour to carry
+  status, so keyboard focus has to be unmistakable and never colour-only —
+  a solid ring plus an offset that reads against both the page ground and the
+  lighter panel fills.
+*/
+:where(a, button, input, [tabindex]):focus-visible {
+  outline: 2px solid #2dd4bf;
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* Anchor navigation must not drop a heading underneath the sticky header. */
+:where(section[id]) {
+  scroll-margin-top: 5rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

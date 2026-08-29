@@ -75,10 +75,13 @@ const PLAN = [
       NEXT_PUBLIC_SUPABASE_URL: web.NEXT_PUBLIC_SUPABASE_URL,
       NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: web.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
       NEXT_PUBLIC_CONTROL_PLANE_URL: CONTROL_PLANE_PUBLIC_URL,
-      // The sentinel-agent (the Ask box) is not deployed — it runs on the
-      // command laptop. Pointed at the control plane so a missing variable
-      // cannot silently become the string "undefined" in a fetch URL.
-      NEXT_PUBLIC_SENTINEL_AGENT_URL: CONTROL_PLANE_PUBLIC_URL,
+      // The console talks to the ElevenLabs agent directly from the browser
+      // via their SDK, so there is no server-side agent URL to set. The old
+      // NEXT_PUBLIC_SENTINEL_AGENT_URL pointed at the control plane, which
+      // has no /v1/ask route — every submission 404'd until the Ask box was
+      // removed. Deleted rather than left set: an env var nothing reads is a
+      // trap for whoever next tries to work out what talks to what.
+      NEXT_PUBLIC_ELEVENLABS_AGENT_ID: "agent_8001m15d76mafg9rgjkpyfxwm1z6",
       NODE_VERSION: "22",
     },
   },

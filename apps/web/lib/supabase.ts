@@ -14,10 +14,11 @@ export const supabase = createClient(
 
 export const CONTROL_PLANE_URL = process.env.NEXT_PUBLIC_CONTROL_PLANE_URL ?? "http://localhost:8787";
 
-/**
- * The Sentinel Agent's /v1/ask endpoint. Separate origin from the control
- * plane on purpose — the agent holds no service-role credential and reads
- * only through the operator's own JWT, so it is deployed and scaled apart
- * from anything that can act on the fleet.
+/*
+ * `SENTINEL_AGENT_URL` was removed with the Ask Sentinel box. It pointed at
+ * apps/sentinel-agent's /v1/ask, but deployment sets
+ * NEXT_PUBLIC_SENTINEL_AGENT_URL to the control-plane origin, which has no
+ * such route, and the agent itself is not deployed — so every call 404'd.
+ * Voice questions now go to the ElevenLabs agent (components/VoiceAgentWidget).
+ * Restore this only alongside a /v1/ask that genuinely answers.
  */
-export const SENTINEL_AGENT_URL = process.env.NEXT_PUBLIC_SENTINEL_AGENT_URL ?? "http://localhost:8789";

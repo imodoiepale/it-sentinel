@@ -1323,4 +1323,136 @@ export function registerVoiceRoutes(app: FastifyInstance) {
       };
     }),
   );
+
+  /**
+   * "That laptop is in Dubai now, not Lagos."
+   *
+   * The second two-step route, for the same reason as retirement and one
+   * more. Speech recognition mishears branch names constantly — this route
+   * has to get TWO of them right in one turn — and a wrong move is doubly
+   * disruptive: the machine vanishes from the branch that was watching it and
+   * appears at one that wasn't, taking its open alerts with it.
+   *
+   * The policy lives entirely in reassign_asset() (migration 0028): the role
+   * check at BOTH branches, the hostname collision, idempotency and the audit
+   * row. This route resolves names to ids and speaks the result — the console
+   * button and this cannot diverge on who may move what.
+   */
+  app.post(
+    "/v1/voice/reassign",
+    handle(async (body) => {
+      const from = await resolveBranch(String(body.branch ?? ""));
+      const toQuery = String(body.toBranch ?? body.to ?? "").trim();
+      if (!toQuery) return { speech: "Which branch should I move it to?" };
+      const to = await resolveBranch(toQuery);
+
+      const hostnameHint = String(body.hostname ?? "").trim();
+
+      const { data: assets, error } = await db
+        .from("assets")
+        .select("id, hostname")
+        .eq("site_id", from.id)
+        .is("decommissioned_at", null)
+        .order("hostname");
+      if (error) throw error;
+      if (!assets?.length) throw new VoiceError(404, `${from.name} has no machines on the roster.`);
+
+      let target = assets[0]!;
+      if (hostnameHint) {
+        const matches = assets.filter((a) => a.hostname.toLowerCase().includes(hostnameHint.toLowerCase()));
+        if (matches.length === 0) {
+          throw new VoiceError(404, `I can't find a machine called ${hostnameHint} at ${from.name}.`);
+        }
+        // Never guess which machine to move, for the same reason retirement
+        // never guesses which to remove.
+        if (matches.length > 1) {
+          throw new VoiceError(409, `${from.name} has ${matches.length} machines matching ${hostnameHint}. Which one?`);
+        }
+        target = matches[0]!;
+      } else if (assets.length > 1) {
+        throw new VoiceError(
+          409,
+          `${from.name} has ${assets.length} machines on the roster. Which one should I move to ${to.name}?`,
+        );
+      }
+
+      // Answered before the confirmation prompt rather than after it: asking
+      // an operator to confirm a move that is already true wastes a turn and
+      // teaches them to confirm without listening.
+      if (from.id === to.id) {
+        return {
+          speech: `${target.hostname} is already at ${to.name}.`,
+          branch: to.name,
+          hostname: target.hostname,
+          alreadyThere: true,
+        };
+      }
+
+      if (body.confirm !== true) {
+        return {
+          speech: `Moving ${target.hostname} from ${from.name} to ${to.name} changes which branch it reports under and takes its open alerts with it. Say "confirm move" to go ahead.`,
+          requiresConfirmation: true,
+          branch: from.name,
+          toBranch: to.name,
+          hostname: target.hostname,
+          assetId: target.id,
+        };
+      }
+
+      const operatorId = await resolveVoiceOperator();
+      const { data, error: rpcError } = await db.rpc("reassign_asset", {
+        p_asset_id: target.id,
+        p_site_id: to.id,
+        p_reason: String(body.reason ?? "reassigned by voice"),
+        p_actor_id: operatorId,
+      });
+      if (rpcError) {
+        const code = (rpcError as { code?: string }).code;
+        // 42501 is the two-ended role check. Named at both ends in the
+        // speech, because "you can't do that" is unactionable when the
+        // operator holds rights at one of the two branches and assumes the
+        // refusal is about the other.
+        if (code === "42501") {
+          throw new VoiceError(403, `You're not authorised to move machines between ${from.name} and ${to.name}.`);
+        }
+        // 23505 is the destination already holding this hostname. Spoken as
+        // the situation rather than the constraint: it usually means the
+        // machine was re-enrolled at the new branch and this row is the
+        // orphaned original, which is a decision for a person.
+        if (code === "23505") {
+          throw new VoiceError(
+            409,
+            `${to.name} already has a machine called ${target.hostname}, so I can't move this one there. One of the two needs retiring first.`,
+          );
+        }
+        throw rpcError;
+      }
+
+      const result = (Array.isArray(data) ? data[0] : data) as
+        | { already_there?: boolean; alerts_moved?: number }
+        | null;
+      if (result?.already_there) {
+        return {
+          speech: `${target.hostname} is already at ${to.name}.`,
+          branch: to.name,
+          hostname: target.hostname,
+          alreadyThere: true,
+        };
+      }
+
+      const alertsMoved = result?.alerts_moved ?? 0;
+      const alertClause = alertsMoved > 0 ? ` ${alertsMoved} open ${plural(alertsMoved, "alert")} moved with it.` : "";
+      return {
+        // The .env is mentioned because ingest keeps the roster's branch and
+        // logs a warning rather than re-homing the machine, so the move works
+        // immediately and the stale slug is a tidy-up, not an outage.
+        speech: `${target.hostname} is now at ${to.name}.${alertClause} Its agent still has ${from.name} in its config, so someone should update SENTINEL_BRANCH_SLUG on the machine when they next touch it.`,
+        branch: to.name,
+        fromBranch: from.name,
+        hostname: target.hostname,
+        alertsMoved,
+        reassigned: true,
+      };
+    }),
+  );
 }
