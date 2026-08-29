@@ -370,8 +370,18 @@ foreach ($pkg in $packages) {
     continue
   }
   Write-Info ('Installing ' + $pkg.Label + ' (' + $pkg.Id + ') ...')
+  # --source winget is not optional. Without it winget also negotiates with
+  # the msstore source, which prints a geographic-region agreement, adds a
+  # round trip before anything downloads, and can resolve to the Store build
+  # of a package instead of the MSI. On venue wifi that turns a slow install
+  # into one that looks hung. Pinning the source makes which artifact gets
+  # installed deterministic as well as faster.
+  #
+  # --disable-interactivity so a package that wants to prompt fails loudly
+  # rather than blocking forever behind a window nobody is watching.
   $code = Invoke-Native -File 'winget' -Arguments @(
-    'install', '-e', '--id', $pkg.Id, '--silent',
+    'install', '-e', '--id', $pkg.Id, '--silent', '--source', 'winget',
+    '--disable-interactivity',
     '--accept-source-agreements', '--accept-package-agreements')
   Update-SessionPath
   if (& $pkg.Probe) {
@@ -405,7 +415,8 @@ if ($vncExe) {
     $passwordAttempted = $false
     $code = Invoke-Native -File 'winget' -Arguments @(
       'install', '-e', '--id', 'GlavSoft.TightVNC', '--silent',
-      '--accept-source-agreements', '--accept-package-agreements')
+      '--source', 'winget', '--disable-interactivity',
+    '--accept-source-agreements', '--accept-package-agreements')
   } else {
     # TightVNC's documented silent-install MSI properties. Passed through
     # winget's --custom, which APPENDS to msiexec's arguments (--override
