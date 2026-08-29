@@ -12,3 +12,20 @@ bin/
 obj/
 *.user
 *.tsbuildinfo
+
+# The compiled enrollment launcher is committed on purpose, against the usual
+# rule about binaries in git.
+#
+# Render builds on Linux and has no csc.exe, so this artifact can never be
+# produced at deploy time — if it is not in the repo, the control plane has
+# nothing to serve and the download button on /enroll simply does not exist.
+# Committing it is what makes the feature real in production.
+#
+# It is 28 KB, reproducible from installer/SentinelSetup.cs with
+# installer/build.ps1, and unsigned — see installer/README.md for the
+# SmartScreen consequences. A negation cannot reach inside an ignored
+# directory, so the directory is unignored first and everything else in it
+# re-ignored below.
+!installer/dist/
+installer/dist/*
+!installer/dist/SentinelSetup.exe

@@ -297,10 +297,116 @@ export default function EnrollPage() {
           </p>
         </section>
 
-        {/* ------------------------------------------ 3. what it does --- */}
+        {/* ---------------------------------------- 3. or double-click --- */}
+        {/*
+          Only rendered when the control plane says it has something to give.
+          See the Installer interface for why that is asked rather than
+          assumed.
+        */}
+        {(cmdInstaller || exeInstaller) && (
+          <section aria-labelledby="step-download">
+            <h2 id="step-download" className="text-sm font-semibold mb-1">
+              <span className="text-gray-500 mr-2">3.</span>Or download a launcher and double-click
+              it
+            </h2>
+            <p className="text-xs text-gray-500 mb-4">
+              Same thing as the command above, for anybody who would rather not paste into
+              PowerShell. Both of these download <span className="font-mono">bootstrap.ps1</span>{" "}
+              from this hub and run it — they make no decisions of their own, and the installer
+              still waits for you to type <span className="font-mono text-gray-300">INSTALL</span>.
+              {selected ? null : " Pick a branch above first, or the launcher will ask you."}
+            </p>
+
+            <ul className="grid gap-2">
+              {cmdInstaller && (
+                <li>
+                  <a
+                    href={cmdInstaller.url}
+                    className="flex items-baseline justify-between gap-4 px-3 py-2.5 rounded border border-healthy-ink/40 bg-healthy/10 hover:bg-healthy/20"
+                  >
+                    <span>
+                      <span className="block text-sm">
+                        Download the launcher
+                        <span className="ml-2 text-[10px] uppercase tracking-wide text-healthy-ink">
+                          Recommended
+                        </span>
+                      </span>
+                      <span className="block text-xs text-gray-400">
+                        Plain text — open it in Notepad and read every line before you run it.
+                        Windows asks once whether to run a downloaded file; that is the only
+                        warning.
+                      </span>
+                    </span>
+                    <span className="text-xs font-mono text-healthy-ink shrink-0">
+                      SentinelSetup.cmd
+                    </span>
+                  </a>
+                </li>
+              )}
+
+              {exeInstaller && (
+                <li>
+                  <a
+                    href={exeInstaller.url}
+                    className="flex items-baseline justify-between gap-4 px-3 py-2.5 rounded border border-white/10 bg-white/5 hover:bg-white/10"
+                  >
+                    <span>
+                      <span className="block text-sm">Download the setup program</span>
+                      <span className="block text-xs text-gray-400">
+                        A proper console app with a numbered branch menu. Read the warning below
+                        before you send this to anyone.
+                      </span>
+                    </span>
+                    <span className="text-xs font-mono text-gray-300 shrink-0">
+                      SentinelSetup.exe
+                    </span>
+                  </a>
+                </li>
+              )}
+            </ul>
+
+            {/*
+              Said here rather than left for somebody to discover on the
+              laptop. A teammate who hits a full-screen blue "Windows
+              protected your PC" panel with no warning concludes the download
+              was malicious and stops — which is the correct instinct, and
+              exactly why it has to be pre-empted in writing.
+
+              Border plus heading, never colour alone, matching the operator
+              warning below.
+            */}
+            {exeInstaller && (
+              <div className="mt-3 rounded border border-warning/60 bg-warning/10 p-3">
+                <h3 className="text-xs font-semibold mb-1 text-warning">
+                  <span className="sr-only">Important: </span>Windows will warn about the .exe
+                </h3>
+                <p className="text-xs text-gray-300">
+                  It is not code signed — we have no certificate — so SmartScreen shows a blue{" "}
+                  <span className="font-mono">Windows protected your PC</span> panel with only a{" "}
+                  <span className="font-mono">Don&apos;t run</span> button visible. Click{" "}
+                  <span className="font-mono">More info</span>, then{" "}
+                  <span className="font-mono">Run anyway</span>. Some Defender configurations
+                  quarantine it outright, in which case nothing you click will help.
+                </p>
+                <p className="text-xs text-gray-400 mt-2">
+                  The <span className="font-mono">.cmd</span> above does not have this problem and
+                  does the same job. Reach for the <span className="font-mono">.exe</span> only if
+                  you specifically want the branch menu.
+                </p>
+              </div>
+            )}
+
+            <p className="text-xs text-gray-500 mt-3">
+              Neither launcher needs administrator to start — they ask when they need it, at the
+              same point the pasted command does.
+            </p>
+          </section>
+        )}
+
+        {/* ------------------------------------------ 4. what it does --- */}
         <section aria-labelledby="step-disclosure">
           <h2 id="step-disclosure" className="text-sm font-semibold mb-1">
-            <span className="text-gray-500 mr-2">3.</span>What this installs, and what it can do
+            <span className="text-gray-500 mr-2">4.</span>What this installs, and what it can do
           </h2>
           <p className="text-xs text-gray-500 mb-4">
             The short version. The installer itself shows the full disclosure on screen before it
@@ -353,10 +459,10 @@ export default function EnrollPage() {
           </p>
         </section>
 
-        {/* --------------------------------------------- 4. downloads --- */}
+        {/* --------------------------------------------- 5. downloads --- */}
         <section aria-labelledby="step-downloads">
           <h2 id="step-downloads" className="text-sm font-semibold mb-1">
-            <span className="text-gray-500 mr-2">4.</span>The scripts themselves
+            <span className="text-gray-500 mr-2">5.</span>The scripts themselves
           </h2>
           <p className="text-xs text-gray-500 mb-4">
             Served by the control plane, so they always match the deployed version. Read any of

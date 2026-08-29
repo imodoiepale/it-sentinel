@@ -28,6 +28,7 @@ const SCRIPTS_DIR = process.env.SENTINEL_SCRIPTS_DIR ?? join(__dirname, "..", ".
 const CONTROL_PLANE_URL = process.env.CONTROL_PLANE_URL ?? "http://localhost:8787";
 const HEARTBEAT_INTERVAL_MS = Number(process.env.HEARTBEAT_INTERVAL_MS ?? 60_000);
 const COMMAND_POLL_INTERVAL_MS = Number(process.env.COMMAND_POLL_INTERVAL_MS ?? 5_000);
+const COLLECT_TIMEOUT_MS = Number(process.env.COLLECT_TIMEOUT_MS ?? 45_000);
 const BRANCH_SLUG = process.env.SENTINEL_BRANCH_SLUG;
 const BRANCH_NAME = process.env.SENTINEL_BRANCH_NAME;
 
@@ -169,7 +170,15 @@ let HOST_IP = "0.0.0.0";
 async function runCollectScript(): Promise<Record<string, unknown> | null> {
   try {
     const { stdout } = await execFileAsync("pwsh", ["-NoProfile", "-NonInteractive", "-File", COLLECT_SCRIPT], {
-      timeout: 20_000,
+      // 45s, not 20s. A real collection on a cold machine measured 24s: the
+      // Windows Update COM search alone is ~8s, and the port probe used to
+      // add another ~7s. The old ceiling killed the script mid-run on every
+      // heartbeat, and because a killed process writes no stderr the failure
+      // looked like the collector producing nothing for no reason.
+      //
+      // The heartbeat loop awaits this before sleeping, so a slow collection
+      // stretches the interval rather than overlapping runs.
+      timeout: COLLECT_TIMEOUT_MS,
     });
     const trimmed = stdout.trim();
     return trimmed ? JSON.parse(trimmed) : null;
@@ -185,6 +194,16 @@ async function runCollectScript(): Promise<Record<string, unknown> | null> {
         "[agent-node] pwsh not found. The collector needs PowerShell 7, not Windows PowerShell 5.1.\n" +
           "  Install it:  winget install -e --id Microsoft.PowerShell --source winget\n" +
           "  Then open a NEW terminal — PATH is not refreshed in this one — and start the agent again.",
+      );
+      return null;
+    }
+
+    // execFile reports a timeout kill as killed/SIGTERM with empty output,
+    // which is indistinguishable from a broken script unless it is named.
+    if ((e as { killed?: boolean }).killed) {
+      console.error(
+        `[agent-node] collect.ps1 exceeded ${COLLECT_TIMEOUT_MS / 1000}s and was killed. ` +
+          "Raise COLLECT_TIMEOUT_MS if this machine is genuinely slow.",
       );
       return null;
     }

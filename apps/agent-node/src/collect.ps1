@@ -70,10 +70,33 @@ $services = $requiredServices | ForEach-Object {
   }
 }
 
+# Cached for an hour, on disk.
+#
+# Microsoft.Update.Searcher is the single most expensive call in this script
+# and the least predictable: measured between 8s and 30s on the same machine
+# depending on whether it decides to reach the network. Paying that on every
+# heartbeat is what pushed the collector past its execution timeout, and
+# raising the timeout only moves the cliff because the variance is unbounded.
+#
+# The pending-update count does not change minute to minute, so an hourly
+# refresh loses nothing real. A stale cache is served if the search fails, so
+# a transient WU outage degrades to an old number rather than to no heartbeat.
+$updatesCachePath = Join-Path $env:TEMP 'sentinel-updates-count.txt'
 $updates = Get-SafeValue {
-  $searcher = New-Object -ComObject Microsoft.Update.Searcher
-  $result = $searcher.Search("IsInstalled=0")
-  $result.Updates.Count
+  $cached = $null
+  if (Test-Path $updatesCachePath) {
+    $age = (Get-Date) - (Get-Item $updatesCachePath).LastWriteTime
+    $cached = [int](Get-Content $updatesCachePath -Raw).Trim()
+    if ($age.TotalHours -lt 1) { return $cached }
+  }
+  try {
+    $searcher = New-Object -ComObject Microsoft.Update.Searcher
+    $count = $searcher.Search("IsInstalled=0").Updates.Count
+    Set-Content -Path $updatesCachePath -Value $count -Encoding ASCII
+    $count
+  } catch {
+    if ($null -ne $cached) { $cached } else { 0 }
+  }
 } 0
 
 $recentEvents = Get-SafeValue {
@@ -126,7 +149,20 @@ $result = [ordered]@{
   tightVncDetail = [ordered]@{
     installed = [bool](Get-Service -Name 'tvnserver' -ErrorAction SilentlyContinue)
     serviceRunning = (Get-SafeValue { (Get-Service -Name 'tvnserver' -ErrorAction Stop).Status -eq 'Running' } $false)
-    portReachable = (Get-SafeValue { (Test-NetConnection -ComputerName 'localhost' -Port 5900 -WarningAction SilentlyContinue).TcpTestSucceeded } $false)
+    # A raw TcpClient with a 1s deadline, not Test-NetConnection. That cmdlet
+    # takes ~7.5s to report a CLOSED port because it runs its full diagnostic
+    # suite, and on a machine where TightVNC is not yet installed that is the
+    # normal path, not the exception. Together with the Windows Update search
+    # it pushed collect.ps1 past the agent's execution timeout, and a killed
+    # process writes nothing to stderr - so the whole collector failed with
+    # "no output at all" and no clue why.
+    portReachable = (Get-SafeValue {
+      $probe = New-Object System.Net.Sockets.TcpClient
+      try {
+        $async = $probe.BeginConnect('127.0.0.1', 5900, $null, $null)
+        if ($async.AsyncWaitHandle.WaitOne(1000, $false)) { $probe.EndConnect($async); $true } else { $false }
+      } catch { $false } finally { $probe.Close() }
+    } $false)
   }
   security = [ordered]@{
     # if/else rather than a ternary: `?:` is PowerShell 7 only, and
