@@ -185,6 +185,28 @@ app.post<{ Body: { toE164: string } }>("/v1/reports/daily/whatsapp", async (requ
 
 app.get("/healthz", async () => ({ status: "ok" }));
 
+/**
+ * A landing page for the API root.
+ *
+ * There is nothing to serve at `/` — this process is an API and the console
+ * is a separate service — but Fastify's bare 404 ("Route GET:/ not found")
+ * reads as a broken deployment to anyone who pastes the URL into a browser,
+ * which is the first thing everybody does. Saying what this is, and where
+ * the console lives, costs one route.
+ */
+app.get("/", async () => ({
+  service: "it-sentinel-control-plane",
+  status: "ok",
+  note: "This is the API, not the dashboard. There is no page here by design.",
+  console: process.env.CONSOLE_URL ?? "https://it-sentinel-web.onrender.com",
+  health: "/healthz",
+  endpoints: {
+    fleet: "GET /v1/sites",
+    heartbeat: "POST /v1/heartbeat",
+    voice: "POST /v1/voice/* (requires the x-sentinel-voice-key header)",
+  },
+}));
+
 app
   .listen({ port: env.PORT, host: "0.0.0.0" })
   .then(() => {
