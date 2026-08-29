@@ -174,7 +174,7 @@ export function VoiceBar({ onOpenBranch }: Props) {
       )}
 
       {state === "error" && errorMessage && (
-        <span role="status" aria-live="polite" className="text-xs text-critical max-w-[18rem]">
+        <span role="status" aria-live="polite" className="text-xs text-critical-ink max-w-[18rem]">
           {errorMessage}
         </span>
       )}
@@ -210,7 +210,7 @@ export function VoiceBar({ onOpenBranch }: Props) {
           aria-pressed={listening}
           className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm transition-colors ${
             listening
-              ? "bg-critical/20 border-critical text-critical ring-2 ring-critical/40"
+              ? "bg-critical/20 border-critical text-critical-ink ring-2 ring-critical/40"
               : state === "resolving"
                 ? "bg-white/10 border-white/20"
                 : "bg-white/5 border-white/10 hover:bg-white/10"

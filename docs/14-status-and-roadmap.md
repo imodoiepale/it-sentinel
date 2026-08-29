@@ -14,7 +14,7 @@ The honest state of the system, as of this writing. Nothing in this document is 
 - **The web console** (`apps/web`) — auth, branch sidebar, fleet table, voice with live-verified branch resolution, the 13-tab Machine Workspace with Remote Desktop and Terminal genuinely wired to real backends. Clean `next build`.
 - **The script library** — 8 real, hash-verified, seeded playbooks across printer/network/Enquest/Windows/security.
 
-**76/76 tests passing across the whole workspace.** Every number above is traceable to an actual test run, not a description — see [12-testing-and-verification.md](./12-testing-and-verification.md) for exactly what each suite proves.
+**488 tests passing across the whole workspace** (at the time of writing; run `pnpm test` for the live figure). Every number above is traceable to an actual test run, not a description — see [12-testing-and-verification.md](./12-testing-and-verification.md) for exactly what each suite proves.
 
 ## Stubbed — real code, deliberately standing in for something not yet attached
 

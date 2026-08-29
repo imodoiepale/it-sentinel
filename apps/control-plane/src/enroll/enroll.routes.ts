@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join, resolve, sep } from "node:path";
 import type { FastifyInstance } from "fastify";
 import { db } from "../db.js";
@@ -93,20 +93,41 @@ const SERVABLE_INSTALLER_ARTIFACTS = new Map<string, InstallerArtifact>([
 ]);
 
 /**
- * Reads one allowlisted launcher. `null` means this deployment does not have
- * that file, which for the .exe is the *expected* state and not a fault —
- * see the 503 the route returns and installer/README.md for why the binary
- * is not committed.
+ * Absolute path of one allowlisted launcher, or `null` if this deployment
+ * has no checkout to read from.
+ *
+ * `artifact.path` is a module constant, so this join cannot escape the repo.
+ * The check below is kept explicit rather than clever so the next person
+ * adding an entry to SERVABLE_INSTALLER_ARTIFACTS can see that the value has
+ * to stay a literal.
  */
-function readInstallerArtifact(artifact: InstallerArtifact): Buffer | null {
+function locateInstallerArtifact(artifact: InstallerArtifact): string | null {
   const root = locateRepoRoot();
   if (!root) return null;
 
-  // artifact.path is a module constant, so this join cannot escape the repo.
-  // Kept explicit rather than clever so the next person adding an entry to
-  // SERVABLE_INSTALLER_ARTIFACTS can see that the value must stay a literal.
   const path = resolve(root, ...artifact.path.split("/"));
   if (!path.startsWith(resolve(root) + sep)) return null;
+  return path;
+}
+
+/**
+ * Whether this deployment can serve a launcher at all.
+ *
+ * A stat rather than a read, because the index route asks this for every
+ * artifact on every request and reading a 28 KB binary to answer a boolean
+ * is not a thing to do per request. For the .exe the answer is normally
+ * `false` on a hosted deployment, and that is the expected state rather than
+ * a fault — see installer/README.md for why the binary is not committed.
+ */
+function installerArtifactExists(artifact: InstallerArtifact): boolean {
+  const path = locateInstallerArtifact(artifact);
+  return path !== null && existsSync(path);
+}
+
+/** Reads one allowlisted launcher. `null` means it is not on this disk. */
+function readInstallerArtifact(artifact: InstallerArtifact): Buffer | null {
+  const path = locateInstallerArtifact(artifact);
+  if (path === null) return null;
 
   try {
     const bytes = readFileSync(path);
@@ -238,7 +259,7 @@ export function registerEnrollRoutes(app: FastifyInstance): void {
         file: name,
         url: `${base}/v1/enroll/installer/${name}`,
         description: artifact.description,
-        available: readInstallerArtifact(artifact) !== null,
+        available: installerArtifactExists(artifact),
       })),
     });
   });

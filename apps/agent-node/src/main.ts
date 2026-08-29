@@ -5,7 +5,7 @@ import { dirname, join } from "node:path";
 import { readFileSync } from "node:fs";
 import { networkInterfaces } from "node:os";
 import { createSocket } from "node:dgram";
-import { CommandResult, HeartbeatPayload } from "@it-sentinel/contracts";
+import { CommandResult, HeartbeatPayload, stripWireNulls } from "@it-sentinel/contracts";
 import { executeCommand, runPowerShellReal, type ExecutorDeps, type ScriptManifest } from "./exec/executor.js";
 
 /**
@@ -28,6 +28,7 @@ const SCRIPTS_DIR = process.env.SENTINEL_SCRIPTS_DIR ?? join(__dirname, "..", ".
 const CONTROL_PLANE_URL = process.env.CONTROL_PLANE_URL ?? "http://localhost:8787";
 const HEARTBEAT_INTERVAL_MS = Number(process.env.HEARTBEAT_INTERVAL_MS ?? 60_000);
 const COMMAND_POLL_INTERVAL_MS = Number(process.env.COMMAND_POLL_INTERVAL_MS ?? 5_000);
+const COLLECT_TIMEOUT_MS = Number(process.env.COLLECT_TIMEOUT_MS ?? 45_000);
 const BRANCH_SLUG = process.env.SENTINEL_BRANCH_SLUG;
 const BRANCH_NAME = process.env.SENTINEL_BRANCH_NAME;
 
@@ -55,14 +56,19 @@ let myAssetId: string | null = null;
  * and the agent published an address the relay could never reach.
  */
 const VIRTUAL_RANGES = [
-  /^192\.168\.56\./, // VirtualBox host-only
+  /^192\.168\.56\./, // VirtualBox host-only, the default and the one that bit us
   /^192\.168\.99\./, // docker-machine / minikube
-  /^172\.1[7-9]\./, // Docker bridge networks
-  /^172\.2[0-9]\./,
-  /^172\.3[0-1]\./,
+  /^172\.17\./, // docker0, Docker's default bridge specifically
   /^169\.254\./, // APIPA: no DHCP answered, routes nowhere
-  /^100\.64\./, // CGNAT / some VPN clients
 ];
+
+// Deliberately NOT blocked: the rest of 172.16.0.0/12. An earlier version
+// excluded 172.16-172.31 wholesale to catch Docker networks and thereby
+// rejected 172.20.10.x — which is the iPhone personal-hotspot range, i.e.
+// exactly the network this fleet runs on. RFC1918 says that whole block is
+// ordinary private space; only Docker's own default bridge is predictable
+// enough to name. Guessing "virtual" from a prefix is what the routing probe
+// exists to avoid, so the blocklist stays small and the router decides.
 
 function nameLooksVirtual(name: string): boolean {
   return /vEthernet|Loopback|VirtualBox|VMware|Hyper-V|Docker|WSL|TAP|Tailscale|ZeroTier/i.test(name);
@@ -164,12 +170,52 @@ let HOST_IP = "0.0.0.0";
 async function runCollectScript(): Promise<Record<string, unknown> | null> {
   try {
     const { stdout } = await execFileAsync("pwsh", ["-NoProfile", "-NonInteractive", "-File", COLLECT_SCRIPT], {
-      timeout: 20_000,
+      // 45s, not 20s. A real collection on a cold machine measured 24s: the
+      // Windows Update COM search alone is ~8s, and the port probe used to
+      // add another ~7s. The old ceiling killed the script mid-run on every
+      // heartbeat, and because a killed process writes no stderr the failure
+      // looked like the collector producing nothing for no reason.
+      //
+      // The heartbeat loop awaits this before sleeping, so a slow collection
+      // stretches the interval rather than overlapping runs.
+      timeout: COLLECT_TIMEOUT_MS,
     });
     const trimmed = stdout.trim();
     return trimmed ? JSON.parse(trimmed) : null;
   } catch (err) {
-    console.error("[agent-node] collect.ps1 failed:", (err as Error).message);
+    // execFile's Error.message is just the command line — it drops the
+    // script's own stderr, which is the only part that says WHY. Reporting
+    // "Command failed: pwsh -File collect.ps1" and nothing else sent us
+    // debugging blind once already.
+    const e = err as NodeJS.ErrnoException & { stderr?: string; stdout?: string; code?: unknown };
+
+    if (e.code === "ENOENT") {
+      console.error(
+        "[agent-node] pwsh not found. The collector needs PowerShell 7, not Windows PowerShell 5.1.\n" +
+          "  Install it:  winget install -e --id Microsoft.PowerShell --source winget\n" +
+          "  Then open a NEW terminal — PATH is not refreshed in this one — and start the agent again.",
+      );
+      return null;
+    }
+
+    // execFile reports a timeout kill as killed/SIGTERM with empty output,
+    // which is indistinguishable from a broken script unless it is named.
+    if ((e as { killed?: boolean }).killed) {
+      console.error(
+        `[agent-node] collect.ps1 exceeded ${COLLECT_TIMEOUT_MS / 1000}s and was killed. ` +
+          "Raise COLLECT_TIMEOUT_MS if this machine is genuinely slow.",
+      );
+      return null;
+    }
+
+    const stderr = (e.stderr ?? "").trim();
+    const stdout = (e.stdout ?? "").trim();
+    console.error("[agent-node] collect.ps1 failed:", e.message);
+    if (stderr) console.error("[agent-node] collect.ps1 stderr:\n" + stderr.slice(0, 2000));
+    // A non-JSON stdout usually means the script emitted a warning or a
+    // prompt before its payload, which is worth seeing in full.
+    else if (stdout) console.error("[agent-node] collect.ps1 stdout (not JSON):\n" + stdout.slice(0, 800));
+    else console.error("[agent-node] collect.ps1 produced no output at all.");
     return null;
   }
 }
@@ -229,7 +275,9 @@ function toHeartbeat(detail: Record<string, unknown>): HeartbeatPayload | null {
     user: detail.user,
   };
 
-  const parsed = HeartbeatPayload.safeParse(candidate);
+  // PowerShell emits null for every absent value; the contract's optional
+  // fields accept a missing key but not an explicit null.
+  const parsed = HeartbeatPayload.safeParse(stripWireNulls(candidate));
   if (!parsed.success) {
     console.error("[agent-node] heartbeat failed contract validation:", parsed.error.issues);
     return null;

@@ -1,4 +1,4 @@
-import { HeartbeatPayload } from "@it-sentinel/contracts";
+import { HeartbeatPayload, stripWireNulls } from "@it-sentinel/contracts";
 import { db } from "../db.js";
 
 /**
@@ -66,7 +66,10 @@ function deriveHealthStatus(hb: HeartbeatPayload): "healthy" | "warning" | "crit
 }
 
 export async function ingestHeartbeat(raw: unknown) {
-  const parsed = HeartbeatPayload.safeParse(raw);
+  // Applied here too, not only in agent-node: agent-less, agent-dotnet and
+  // anything future hit this same JSON-null-vs-undefined mismatch, and the
+  // boundary is the one place that sees all of them.
+  const parsed = HeartbeatPayload.safeParse(stripWireNulls(raw));
   if (!parsed.success) {
     throw new HeartbeatValidationError(parsed.error.issues);
   }

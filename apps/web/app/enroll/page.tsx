@@ -285,9 +285,99 @@ export default function EnrollPage() {
           </p>
         </section>
 
+        {(cmdInstaller || exeInstaller) && (
+          <section aria-labelledby="step-download">
+            <h2 id="step-download" className={`${ui.subheading} mb-1`}>
+              <span className="mr-2 text-fog">3.</span>Or download a launcher and double-click it
+            </h2>
+            <p className={`${ui.caption} mb-4`}>
+              Same thing as the command above, for anybody who would rather not paste into
+              PowerShell. Both of these download <span className="font-mono">bootstrap.ps1</span>{" "}
+              from this hub and run it — they make no decisions of their own, and the installer
+              still waits for you to type <span className="font-mono text-graphite">INSTALL</span>.
+              {selected ? null : " Pick a branch above first, or the launcher will ask you."}
+            </p>
+
+            <ul className="grid gap-2">
+              {cmdInstaller && (
+                <li>
+                  <a
+                    href={cmdInstaller.url}
+                    className="flex items-baseline justify-between gap-4 rounded-cards border border-obsidian bg-snow px-card py-3 hover:bg-quiet"
+                  >
+                    <span>
+                      <span className="block text-[14px] text-obsidian">
+                        Download the launcher
+                        <span className="ml-2 text-[12px] font-medium text-steel">Recommended</span>
+                      </span>
+                      <span className="mt-1 block text-[12px] text-fog">
+                        Plain text — open it in Notepad and read every line before you run it.
+                        Windows asks once whether to run a downloaded file; that is the only
+                        warning.
+                      </span>
+                    </span>
+                    <span className="shrink-0 font-mono text-[12px] text-steel">
+                      SentinelSetup.cmd
+                    </span>
+                  </a>
+                </li>
+              )}
+
+              {exeInstaller && (
+                <li>
+                  <a
+                    href={exeInstaller.url}
+                    className="flex items-baseline justify-between gap-4 rounded-cards border border-cloud bg-snow px-card py-3 hover:bg-quiet"
+                  >
+                    <span>
+                      <span className="block text-[14px] text-obsidian">
+                        Download the setup program
+                      </span>
+                      <span className="mt-1 block text-[12px] text-fog">
+                        A proper console app with a numbered branch menu. Read the warning below
+                        before you send this to anyone.
+                      </span>
+                    </span>
+                    <span className="shrink-0 font-mono text-[12px] text-steel">
+                      SentinelSetup.exe
+                    </span>
+                  </a>
+                </li>
+              )}
+            </ul>
+
+            {exeInstaller && (
+              <div className={`mt-3 ${ui.cardDark}`}>
+                <h3 className="mb-1 text-[14px] font-medium text-snow">
+                  <span className="sr-only">Important: </span>Windows will warn about the .exe
+                </h3>
+                <p className="text-[13px] leading-[1.64] text-mist">
+                  It is not code signed — we have no certificate — so SmartScreen shows a blue{" "}
+                  <span className="font-mono">Windows protected your PC</span> panel with only a{" "}
+                  <span className="font-mono">Don&apos;t run</span> button visible. Click{" "}
+                  <span className="font-mono">More info</span>, then{" "}
+                  <span className="font-mono">Run anyway</span>. Some Defender configurations
+                  quarantine it outright, in which case nothing you click will help.
+                </p>
+                <p className="mt-2 text-[13px] leading-[1.64] text-ash">
+                  The <span className="font-mono">.cmd</span> above does not have this problem and
+                  does the same job. Reach for the <span className="font-mono">.exe</span> only if
+                  you specifically want the branch menu.
+                </p>
+              </div>
+            )}
+
+            <p className={`${ui.caption} mt-3`}>
+              Neither launcher needs administrator to start — they ask when they need it, at the
+              same point the pasted command does.
+            </p>
+          </section>
+        )}
+
         <section aria-labelledby="step-disclosure">
           <h2 id="step-disclosure" className={`${ui.subheading} mb-1`}>
-            <span className="mr-2 text-fog">3.</span>What this installs, and what it can do
+            <span className="mr-2 text-fog">{cmdInstaller || exeInstaller ? "4." : "3."}</span>
+            What this installs, and what it can do
           </h2>
           <p className={`${ui.caption} mb-4`}>
             The short version. The installer itself shows the full disclosure on screen before it
@@ -337,7 +427,8 @@ export default function EnrollPage() {
 
         <section aria-labelledby="step-downloads">
           <h2 id="step-downloads" className={`${ui.subheading} mb-1`}>
-            <span className="mr-2 text-fog">4.</span>The scripts themselves
+            <span className="mr-2 text-fog">{cmdInstaller || exeInstaller ? "5." : "4."}</span>
+            The scripts themselves
           </h2>
           <p className={`${ui.caption} mb-4`}>
             Served by the control plane, so they always match the deployed version. Read any of

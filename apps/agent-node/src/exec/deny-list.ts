@@ -45,8 +45,17 @@ const DENY_RULES: DenyRule[] = [
    * Set-Content is in none of them. T4 trades that allowlist away, so the
    * gap became reachable and the rule now matches the guard files by name in
    * any path form, forward or backslash, source or build output.
+   *
+   * process-control.ts joined the list when app_close was added: it is the
+   * file that decides lsass, tvnserver and the agent's own process are
+   * unkillable, so an edit to it is an edit to what the agent refuses —
+   * exactly what this rule protects. Widening the alternation only ever adds
+   * refusals; nothing that was denied before becomes permitted.
    */
-  { pattern: "modify_own_policy", test: /\b(deny-list|tier-resolver|executor|app-launcher)\.(ts|js|mjs|cjs)\b/i },
+  {
+    pattern: "modify_own_policy",
+    test: /\b(deny-list|tier-resolver|executor|app-launcher|process-control)\.(ts|js|mjs|cjs)\b/i,
+  },
   { pattern: "delete_user_data", test: /Remove-Item.*-Recurse.*-Force.*\\Users\\[^\\]+\\(Documents|Desktop|Pictures)/i },
   { pattern: "delete_mailbox", test: /Remove-Mailbox|Remove-MsolUser/i },
   { pattern: "delete_backup", test: /Remove-Item.*\.(bak|backup)\b/i },

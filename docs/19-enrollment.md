@@ -36,6 +36,101 @@ change anything until the person at the keyboard types `INSTALL`.
 
 ---
 
+## 1a. Or download something and double-click it
+
+Not everybody wants to paste a command into PowerShell, so `/enroll` also
+offers two launchers. Both do exactly what the one-liner does — download
+`bootstrap.ps1` from this hub and run it. Neither makes a decision about the
+machine, and the installer still waits for a typed `INSTALL`.
+
+| | `SentinelSetup.cmd` | `SentinelSetup.exe` | the one-liner |
+|---|---|---|---|
+| Double-clickable | yes | yes | no |
+| Readable before running | yes, it is text | no, it is a binary | yes |
+| Windows warning | one "Run anyway" | full-screen blue SmartScreen panel | none |
+| Branch menu | no | yes, fetched live | the installer asks |
+| Available on the hosted hub | yes | **usually no** (§1c) | yes |
+
+**Which to use.**
+
+- **PowerShell is fine with you?** Use the one-liner. Fewest moving parts,
+  and it is what the rest of these docs assume.
+- **Sending this to a teammate?** Send the **`.cmd`**. It is plain text they
+  can open in Notepad and read before running, and it does not trip the
+  unsigned-binary machinery.
+- **`.exe`?** Only when you specifically want the numbered branch menu, and
+  only after warning the recipient about §1b.
+
+**For demo day the recommendation is the one-liner, with the `.cmd` as the
+fallback for anybody who balks at a terminal.** The `.exe` is the artifact
+most likely to produce a security scare in front of an audience.
+
+Full detail, including how to build the `.exe`, is in
+[`installer/README.md`](../installer/README.md).
+
+## 1b. The `.exe` is unsigned, and Windows will say so
+
+Signing needs an Authenticode certificate nobody on this project has. An
+unsigned binary that arrives through a browser and then launches PowerShell
+is close to the textbook description of a dropper, and Windows treats it that
+way. **This is the honest reason the `.exe` may be a worse experience than
+the one-liner it was meant to replace.**
+
+What a teammate sees:
+
+1. The browser may flag the download first. Chrome shows *"SentinelSetup.exe
+   is not commonly downloaded and may be dangerous"*, with **Keep** hidden
+   behind the `⋮` menu on the download chip.
+2. On double-click, a **full-screen blue panel**: *"Windows protected your
+   PC — Microsoft Defender SmartScreen prevented an unrecognised app from
+   starting."* The only visible button is **Don't run**.
+3. The way forward is a small underlined **More info** link above that button.
+   It is easy to miss, by design. Clicking it shows `Publisher: Unknown
+   publisher` and reveals a second button, **Run anyway**.
+4. Then the console window opens.
+
+And a fifth outcome with no click-path: some Defender and most third-party AV
+configurations **quarantine the file outright**, or kill the process when it
+starts `powershell.exe`. The file vanishes from Downloads and nothing you
+click brings it back. That is correct behaviour on a machine you do not
+administer, not a bug to fix.
+
+What was done about it, short of a certificate: `SentinelSetup.cs` sets real
+assembly metadata (`AssemblyTitle`, `AssemblyProduct`, `AssemblyCompany`,
+`AssemblyDescription`, `AssemblyVersion`), which csc turns into the Win32
+version resource. A blank version resource scores measurably worse in
+SmartScreen's heuristics, and the Properties → Details tab is the first place
+a suspicious teammate looks. It is a console app rather than WinForms, so it
+cannot silently do nothing, and it is not packed or obfuscated, both of which
+are AV triggers. None of that is a substitute for signing.
+
+The `/enroll` page carries this warning next to the download button.
+
+## 1c. Why the `.exe` usually is not there, and what happens then
+
+`SentinelSetup.exe` is compiled by `csc.exe` — the C# compiler inside the
+.NET Framework, present on every Windows 10/11 machine and needing no SDK.
+Render builds on Linux, where there is no `csc.exe`, and the binary is
+**deliberately not committed**: it could never be rebuilt or verified at
+deploy time, so it would be an opaque, unsignable blob in git forever that
+launches PowerShell. The full argument, and what to change if you disagree,
+is in [`installer/README.md`](../installer/README.md#why-the-exe-is-not-in-git).
+
+The consequence is handled rather than hidden:
+
+- `GET /v1/enroll` reports an `available` flag per launcher.
+- `/enroll` renders each download button **only when the hub says it has the
+  file**. On Render the page shows the `.cmd` and no `.exe` button. On a
+  Windows-hosted hub where somebody has run `installer\build.ps1`, both.
+- `GET /v1/enroll/installer/SentinelSetup.exe` returns `503
+  installer_unavailable` with an `alternatives` object naming the `.cmd` URL
+  and the one-liner, so anybody hitting the URL directly is not left at a
+  dead end.
+
+The `.cmd` is committed, so it is always served.
+
+---
+
 ## 2. Why the scripts come from the control plane and not from GitHub
 
 They used to come from `raw.githubusercontent.com`. Three reasons they no
@@ -121,9 +216,20 @@ All under `apps/control-plane/src/enroll/`, registered by
 | `GET /v1/enroll/install-sentinel-agent.ps1` | `text/plain` |
 | `GET /v1/enroll/preflight.ps1` | `text/plain` |
 | `GET /v1/enroll/uninstall-sentinel-agent.ps1` | `text/plain` |
+| `GET /v1/enroll/installer/SentinelSetup.cmd` | the batch launcher, as an attachment |
+| `GET /v1/enroll/installer/SentinelSetup.exe` | the compiled launcher, or `503` (§1c) |
 
 `text/plain` and not JSON on purpose: `Invoke-RestMethod` parses by content
 type, and `irm … | iex` needs a string.
+
+The two launcher routes always send `Content-Disposition: attachment`. A
+browser that renders a `.cmd` inline hands somebody a page of text with no
+obvious way to save it, and one that decides to *run* a downloaded `.exe` on
+its own is a category of surprise these routes should not be capable of
+causing. The `.cmd` is also **re-line-ended to CRLF on the way out** — not
+cosmetic, because `cmd.exe` mis-parses `goto` labels and parenthesised blocks
+in a bare-LF file and that launcher uses both, and git is entitled to
+normalise the working tree on the Linux checkout Render serves from.
 
 **`/v1/enroll/branches` returns exactly the seven slugs that
 `install-sentinel-agent.ps1` accepts**, not every row in `sites`. The
@@ -148,10 +254,20 @@ A second check that the resolved path is still inside `scripts/` is there as
 defence in depth, unreachable today, and kept because the allowlist being
 loosened later is the failure that would matter.
 
+`/v1/enroll/installer/:file` works the same way, with its own `Map` and its
+own set of constants. It is the more tempting target of the two, being the
+one that reads outside `scripts/`.
+
 `apps/control-plane/test/enroll.routes.test.ts` exercises ten traversal
-shapes plus a real-but-not-allowlisted file (`simulate-fault.ps1`), through
-Fastify's router rather than by calling the handler, because URL decoding is
-part of what is being tested.
+shapes against the scripts route plus a real-but-not-allowlisted file
+(`simulate-fault.ps1`), and thirteen against the installer route — including
+the one that matters most, that `/v1/enroll/installer/bootstrap.ps1` is a
+`404`, so the two allowlists cannot quietly merge into one servable
+directory. It also asserts that an unknown name gets `404` and not the `503`,
+even on a deployment with no `installer/` at all: allowlist first, disk
+second, or the `503` becomes an oracle for which paths exist on the server.
+All of it goes through Fastify's router rather than the handler, because URL
+decoding is part of what is being tested.
 
 ---
 
@@ -259,11 +375,17 @@ cannot go stale under a running server. A redeploy rebuilds it.
 | `Could not clone …` then it carries on | expected. github.com is unreachable; the archive fallback took over. |
 | `… already exists, has files in it, and is not an IT Sentinel copy` | something else is at `%USERPROFILE%\it-sentinel`. Move it, or pass `-InstallRoot C:\it-sentinel`. |
 | Machine installs but never appears | wrong `-ControlPlaneUrl`, or the branch slug was rejected. Run `scripts\preflight.ps1`. |
+| No `.exe` download button on `/enroll` | expected on the hosted hub. The binary is not committed (§1c). Use the `.cmd`. |
+| `503 installer_unavailable` | same cause. The response names the `.cmd` URL and the one-liner. |
+| "Windows protected your PC" on the `.exe` | expected, it is unsigned. **More info** → **Run anyway** (§1b). |
+| The `.exe` disappears from Downloads | AV quarantined it. Nothing to click. Use the `.cmd`. |
+| `.cmd` opens in Notepad instead of running | the browser saved it as `.txt`. Rename it back to `.cmd`, or use the one-liner. |
 
 ---
 
 ## 7. See also
 
+- [`installer/README.md`](../installer/README.md) — the two launchers, building the exe, and the signing problem
 - [15 — Hackathon demo runbook](./15-hackathon-demo-runbook.md) — the manual path this replaces
 - [18 — Decommissioning](./18-decommissioning.md) — the way back out
 - [05 — Security model](./05-security-model.md)

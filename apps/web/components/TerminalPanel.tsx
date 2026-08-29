@@ -128,14 +128,14 @@ export function TerminalPanel({ assetId, operatorId }: Props) {
 
   return (
     <div className="flex flex-col h-full p-4 gap-3 font-mono text-sm">
-      <div className="flex-1 overflow-auto bg-black/40 rounded p-3 space-y-1">
-        {log.length === 0 && <div className="text-gray-600">No commands run this session.</div>}
+      <div className="flex-1 overflow-auto bg-black/50 rounded-lg border border-white/10 p-3 space-y-1">
+        {log.length === 0 && <div className="text-muted">No commands run this session.</div>}
         {log.map((entry, i) => (
           <div key={i}>
-            <span className={entry.tier === "T4" ? "text-critical" : "text-gray-500"}>[{entry.tier}]</span>{" "}
-            <span className={entry.status === "refused" ? "text-critical" : "text-gray-200"}>{entry.command}</span>
-            {entry.status === "refused" && <span className="text-critical"> — refused: {entry.detail}</span>}
-            {entry.status === "dispatched" && <span className="text-healthy"> — dispatched</span>}
+            <span className={entry.tier === "T4" ? "text-critical-ink" : "text-gray-500"}>[{entry.tier}]</span>{" "}
+            <span className={entry.status === "refused" ? "text-critical-ink" : "text-gray-200"}>{entry.command}</span>
+            {entry.status === "refused" && <span className="text-critical-ink"> — refused: {entry.detail}</span>}
+            {entry.status === "dispatched" && <span className="text-healthy-ink"> — dispatched</span>}
           </div>
         ))}
       </div>
@@ -182,7 +182,7 @@ export function TerminalPanel({ assetId, operatorId }: Props) {
                   className="bg-white/5 border border-white/10 rounded px-2 py-1"
                 />
               </div>
-              {authError && <div className="mb-2 text-critical">{authError}</div>}
+              {authError && <div className="mb-2 text-critical-ink">{authError}</div>}
             </>
           )}
 
@@ -238,9 +238,9 @@ export function TerminalPanel({ assetId, operatorId }: Props) {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder={tier === "T4" ? "any PowerShell — password required, audited" : "Get-Service -Name Spooler"}
-          className="flex-1 bg-white/5 border border-white/10 rounded px-2 py-1"
+          className="flex-1 bg-white/5 border border-white/10 rounded-md px-2 py-1.5"
         />
-        <button type="submit" className="px-3 py-1 rounded bg-white/10 hover:bg-white/20">
+        <button type="submit" className="px-3 py-1.5 rounded-md bg-white/10 hover:bg-white/20">
           Run
         </button>
       </form>

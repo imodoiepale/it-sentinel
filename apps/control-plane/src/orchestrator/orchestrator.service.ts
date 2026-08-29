@@ -33,6 +33,7 @@ export async function dispatchCommand(args: {
   serviceName?: string;
   serviceAction?: "start" | "stop" | "restart";
   appId?: string;
+  closeAppId?: string;
   tier: CommandRequest["tier"];
 }): Promise<{ commandIds: string[] }> {
   // Blast-radius rule: anything touching more than N assets auto-promotes
@@ -73,6 +74,7 @@ export async function dispatchCommand(args: {
       serviceName: args.serviceName,
       serviceAction: args.serviceAction,
       appId: args.appId,
+      closeAppId: args.closeAppId,
     });
 
     const { error: enqueueError } = await db.rpc("enqueue_command", { p_message: request });
@@ -99,7 +101,18 @@ export async function dispatchCommand(args: {
       target_id: assetId,
       tier: effectiveTier,
       decision: "allowed",
-      detail: { command_id: commandId, kind: args.kind, script_id: args.scriptId ?? null },
+      // The identifier-based kinds carry no command_text (the executable
+      // text is resolved on the agent, from its own tables), so without this
+      // the audit row for a close says only "app_close on this machine" and
+      // cannot answer the question anyone actually asks afterwards: which
+      // app. Recorded as the identifier that was dispatched, which is the
+      // whole of what this side chose.
+      detail: {
+        command_id: commandId,
+        kind: args.kind,
+        script_id: args.scriptId ?? null,
+        target: args.closeAppId ?? args.appId ?? args.serviceName ?? null,
+      },
     });
 
     commandIds.push(commandId);
