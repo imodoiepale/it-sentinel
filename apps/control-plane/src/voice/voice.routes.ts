@@ -407,7 +407,18 @@ const TOPIC_REPORTS: Record<DetailTopic, (p: TelemetrySnapshot) => TopicReport> 
       bits.push(`definitions are ${hours} ${plural(hours, "hour")} old`);
     }
     if (s.tamperProtectionEnabled === false) bits.push("tamper protection is off");
-    if (s.firewallProfilesEnabled?.length === 0) bits.push("no firewall profiles are enabled");
+    // An EMPTY array is "the collector did not report this", not "the
+    // firewall is off". agent-node has never populated the field, so this
+    // branch fired on every machine in the fleet and had the voice agent
+    // announcing a security breach that did not exist — the worst kind of
+    // false positive, because it is alarming, confident, and wrong.
+    //
+    // Distinguishing absent from empty needs the collector to actually send
+    // the profiles; until a machine does, say nothing rather than guess.
+    if (Array.isArray(s.firewallProfilesEnabled) && s.firewallProfilesEnabled.length > 0) {
+      const off = ["Domain", "Private", "Public"].filter((p) => !s.firewallProfilesEnabled.includes(p));
+      if (off.length > 0) bits.push(`the ${spokenList(off)} firewall profile${off.length === 1 ? " is" : "s are"} off`);
+    }
 
     return {
       healthy: s.status === "healthy",

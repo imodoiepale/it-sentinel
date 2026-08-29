@@ -179,6 +179,14 @@ $result = [ordered]@{
     protectionEnabled = (Get-SafeValue { $defender.RealTimeProtectionEnabled } $false)
     definitionsAgeHours = (Get-SafeValue { [math]::Round(((Get-Date) - $defender.AntivirusSignatureLastUpdated).TotalHours, 1) })
     tamperProtectionEnabled = (Get-SafeValue { $defender.IsTamperProtected })
+    # Actually ask. The contract defaults this to [] when absent, and the
+    # collector never sent it - so every machine reported an empty list, and
+    # the voice route read empty as "the firewall is disabled" and announced a
+    # breach on healthy machines. Reporting the real profiles makes empty mean
+    # empty.
+    firewallProfilesEnabled = (Get-SafeValue {
+      @(Get-NetFirewallProfile -ErrorAction Stop | Where-Object { $_.Enabled } | ForEach-Object { [string]$_.Name })
+    } @())
     status = if ($defender -and $defender.RealTimeProtectionEnabled) { 'healthy' } else { 'critical' }
   }
   printers = @($printers)

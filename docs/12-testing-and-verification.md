@@ -2,7 +2,7 @@
 
 ## The headline number
 
-**488 automated tests passing** across the workspace (the count at the time of writing — run `pnpm test` for the live figure, it moves with every change), plus a full `next build` and `tsc --noEmit` clean pass on every TypeScript package. This isn't a claim — here's exactly where each number comes from and what it actually proves.
+**488 automated tests passing** across the workspace (the count at the time of writing - run `pnpm test` for the live figure, it moves with every change), plus a full `next build` and `tsc --noEmit` clean pass on every TypeScript package. This isn't a claim — here's exactly where each number comes from and what it actually proves.
 
 | Package | Tests | What they prove |
 |---|---|---|
