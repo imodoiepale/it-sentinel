@@ -6,7 +6,7 @@
 # deployed here could never complete a single session. It runs on the
 # command laptop, on the same network as the fleet. This is a routing fact,
 # not a configuration choice — moving it here would silently break every
-# remote session.
+# remote session. ksdjnvlkansdgjnalksdbkjsdkvjnkjsnvmnzxc v
 #
 # Set SUPABASE_SERVICE_ROLE_KEY in the Render dashboard, never in this file:
 # sync:false below means Render prompts for it and keeps it out of git.
